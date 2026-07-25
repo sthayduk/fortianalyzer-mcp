@@ -54,18 +54,37 @@ Prefer the wrappers that hide the two-step entirely: get_fortiview_data,
 run_and_wait_report, run_and_wait_ioc_rescan. Reach for the raw
 run/fetch pairs only when you need to poll or cancel yourself.
 
-## Log filters
+## Filters
 
-Filter strings use FortiAnalyzer's grammar, not SQL and not Python:
+Prefer `filters` -- a list of structured conditions -- over the raw `filter`
+string. Field names are validated before the call and the operator spelling is
+handled for you:
 
-  operators: ==, !=, <, >, <=, >=, contain, !contain
-  combine with: and, or
-  example: "srcip==10.0.0.1 and dstport==443"
+  filters=[{"field": "srcip", "op": "eq", "value": "10.0.0.1"},
+           {"field": "dstport", "op": "in", "value": [80, 443]}]
 
-A single `=`, `&&`, or a typo'd keyword returns an opaque "Invalid filter"
-from the appliance. get_log_fields lists what is filterable for a logtype --
-pass name_filter to it, since the unfiltered catalogue runs to hundreds of
+  ops: eq, ne, gt, gte, lt, lte, contains, not_contains, in, not_in
+  conditions are ANDed; use `in` for OR within one field
+
+English field names are accepted where they are unambiguous (source_ip,
+destination_port, application, policy_id); bare "port" and "country" are not,
+because they do not say src or dst. get_log_fields(name_filter="...") lists
+what a logtype actually carries -- the unfiltered catalogue runs to hundreds of
 entries.
+
+`filter` still accepts a raw FortiAnalyzer expression for syntax `filters`
+cannot express, and the two are mutually exclusive -- passing both is an error
+rather than a silently merged filter. The operators the server emits are `==`,
+`!=`, `<`, `>`, `<=`, `>=`, `contain` and `!contain`, combined with `and`/`or`
+and grouped with parentheses. FortiAnalyzer's own parser accepts more than
+that, but nothing beyond this set is verified against this API here, so treat
+anything else as an experiment you run through `filter`.
+
+search_devices and list_tasks take the same `filters` parameter. Their field
+sets are small enough to enumerate, so an unknown field name there is a hard
+error listing the valid names; for logtypes an unrecognised name is passed
+through with a warning instead, since the appliance's catalogue is larger than
+the server's list.
 
 ## Choosing among overlapping tools
 

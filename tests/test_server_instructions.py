@@ -42,10 +42,25 @@ TID_FAMILIES = {
     "search_ips_logs": (),
 }
 
-#: The FortiAnalyzer filter grammar, as documented on ``query_logs``. A
-#: caller who guesses ``=`` or ``&&`` gets an opaque "Invalid filter" from
-#: the appliance, so the operator set belongs where it is read up front.
+#: The FortiAnalyzer filter grammar the server itself emits. The raw
+#: ``filter`` string remains an escape hatch, so the operator set belongs
+#: where it is read up front.
 FILTER_OPERATORS = ("==", "!=", "<=", ">=", "contain", "!contain")
+
+#: The ``filters`` op vocabulary. This is the surface a caller must get
+#: right, and it is validated locally, so it is the more load-bearing list.
+STRUCTURED_FILTER_OPS = (
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "contains",
+    "not_contains",
+    "in",
+    "not_in",
+)
 
 
 @pytest.fixture(scope="module")
@@ -130,3 +145,24 @@ def test_instructions_document_the_field_trim_escape_hatch(instructions: str) ->
     assert "fields" in instructions
     assert "list_adoms" in instructions
     assert "list_devices" in instructions
+
+
+@pytest.mark.parametrize("op", STRUCTURED_FILTER_OPS)
+def test_structured_filter_ops_are_documented(instructions: str, op: str) -> None:
+    """The op vocabulary is what a caller must get right; freeze it."""
+    assert op in instructions, f"op {op!r} missing from the usage guide"
+
+
+def test_filters_parameter_is_named(instructions: str) -> None:
+    assert "filters" in instructions
+
+
+def test_unverified_operators_are_not_advertised(instructions: str) -> None:
+    """like/regex/isnull are documented by Fortinet but unproven through the
+    API here, so the guide must not promise them.
+
+    Naming them even as "unverified" puts them in front of a model that will
+    then try them, so the guide states the boundary without the vocabulary.
+    """
+    for token in (" like ", "isnull", "isnotnull"):
+        assert token not in instructions
