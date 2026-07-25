@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.instructions import SERVER_INSTRUCTIONS
 from fortianalyzer_mcp.tool_annotations import READ_ONLY_LOCAL, UNCONSTRAINED
 from fortianalyzer_mcp.utils.config import get_settings
 
@@ -49,6 +50,10 @@ if settings.MCP_ALLOWED_HOSTS:
 # session out from under concurrent requests.
 mcp = FastMCP(
     "FortiAnalyzer API Server",
+    # Cross-cutting usage guidance that no single tool docstring can carry --
+    # chiefly that ``tid`` means five incompatible things across the async
+    # families. See ``instructions.py`` for why it is server-level.
+    instructions=SERVER_INSTRUCTIONS,
     stateless_http=True,  # Stateless for Docker deployment
     transport_security=_transport_security,
 )
