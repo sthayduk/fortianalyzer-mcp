@@ -1064,39 +1064,103 @@ async def get_log_stats(
         return {"status": "error", "message": redact(str(e))}
 
 
+def _count_field_entries(payload: Any) -> int:
+    """Count field definitions across every field list in a logfields payload.
+
+    The appliance returns more than one list (a public list and a private-field
+    list), so a count taken off a single key would understate the response.
+    """
+    if isinstance(payload, dict):
+        return sum(_count_field_entries(value) for value in payload.values())
+    if isinstance(payload, list):
+        return sum(1 for entry in payload if isinstance(entry, dict) and "name" in entry)
+    return 0
+
+
+def _filter_field_entries(payload: Any, needle: str) -> Any:
+    """Return a copy of ``payload`` keeping only fields whose name matches.
+
+    Copies rather than editing in place: the payload belongs to the client
+    call, and a future caching layer would inherit any mutation. Lists that
+    are not field lists (no dicts carrying ``name``) pass through untouched
+    so a shape change on the appliance degrades to a no-op, never a crash.
+    """
+    if isinstance(payload, dict):
+        return {key: _filter_field_entries(value, needle) for key, value in payload.items()}
+    if isinstance(payload, list):
+        if not any(isinstance(entry, dict) and "name" in entry for entry in payload):
+            return payload
+        return [
+            entry
+            for entry in payload
+            if isinstance(entry, dict) and needle in str(entry.get("name", "")).lower()
+        ]
+    return payload
+
+
 @mcp.tool(annotations=READ_ONLY)
 async def get_log_fields(
     adom: str | None = None,
     logtype: str = "traffic",
     devtype: str = "FortiGate",
+    name_filter: str | None = None,
 ) -> dict[str, Any]:
-    """Get available log fields for a log type.
+    """Get available log fields for a log type -- what you can filter on.
 
-    Useful for understanding what fields can be used in filters.
+    A live traffic response runs to roughly 200 definitions across two lists,
+    which is more context than it is worth reading in full. Pass
+    ``name_filter`` to narrow it to the fields you are actually after
+    ("src", "port", "app"); the counts in the response say how much was
+    dropped so a narrow answer is never mistaken for the whole catalogue.
 
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)
         logtype: Log type (traffic, event, attack, etc.)
         devtype: Device type (default: "FortiGate")
+        name_filter: Case-insensitive substring; keep only fields whose name
+            contains it. Omit (or pass "") for the full catalogue.
 
     Returns:
         dict: Log fields with keys:
             - status: "success" or "error"
-            - fields: List of available field definitions
+            - fields: The appliance's field payload, filtered when
+              ``name_filter`` was given. A dict of one or more lists of
+              ``{"name": ..., "type": ...}`` entries -- typically a public
+              list plus a private-field list.
+            - name_filter: The filter applied, or None
+            - field_count: Field definitions returned after filtering
+            - total_field_count: Field definitions before filtering
             - message: Error message if failed
 
+    Note:
+        ``type`` is FortiAnalyzer's own discriminator and on 7.6.x it is an
+        undocumented small integer (values such as 0, 4, 6 and 10 are
+        observed). Fortinet publishes no legend for it, so treat it as
+        opaque: to learn a field's real shape, read the field in a sample row
+        from ``query_logs`` rather than trying to decode the code. The value
+        is passed through unchanged in case a future firmware documents it.
+
     Example:
-        >>> result = await get_log_fields(logtype="traffic")
-        >>> for field in result['fields']:
-        ...     print(f"{field['name']}: {field['description']}")
+        >>> result = await get_log_fields(logtype="traffic", name_filter="src")
+        >>> print(f"{result['field_count']} of {result['total_field_count']}")
+        >>> for field in result["fields"]["data"]:
+        ...     print(field["name"])
     """
     try:
         adom = validate_adom(adom or get_default_adom())
         client = _get_client()
         result = await client.get_logfields(adom, logtype, devtype)
+        total = _count_field_entries(result)
+        if name_filter:
+            fields = _filter_field_entries(result, name_filter.lower())
+        else:
+            fields = result
         return {
             "status": "success",
-            "fields": result,
+            "fields": fields,
+            "name_filter": name_filter or None,
+            "field_count": _count_field_entries(fields) if name_filter else total,
+            "total_field_count": total,
         }
     except Exception as e:
         logger.error(f"Failed to get log fields: {e}")
