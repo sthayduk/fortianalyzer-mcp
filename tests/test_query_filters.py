@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_string
+from fortianalyzer_mcp.query.filters import (
+    FilterCondition,
+    compile_to_array,
+    compile_to_string,
+)
 from fortianalyzer_mcp.utils.errors import ValidationError
 
 
@@ -139,3 +143,55 @@ class TestFieldResolution:
         assert result == "weird_field==x"
         assert len(warnings) == 1
         assert "get_log_fields" in warnings[0]
+
+
+class TestArrayDialect:
+    """dvmdb/config/task take a list of [field, op, value] entries, ANDed."""
+
+    def test_eq_emits_one_entry(self) -> None:
+        result, _ = compile_to_array([_c("name", "eq", "fgt-01")], "device")
+        assert result == [["name", "==", "fgt-01"]]
+
+    def test_contains_uses_the_appliance_word_operator(self) -> None:
+        result, _ = compile_to_array([_c("name", "contains", "fgt")], "device")
+        assert result == [["name", "contain", "fgt"]]
+
+    def test_multiple_conditions_become_multiple_entries(self) -> None:
+        result, _ = compile_to_array(
+            [_c("name", "contains", "fgt"), _c("os_ver", "contains", "7.")], "device"
+        )
+        assert result == [["name", "contain", "fgt"], ["os_ver", "contain", "7."]]
+
+    def test_enum_name_is_coerced_to_its_code(self) -> None:
+        result, _ = compile_to_array([_c("conn_status", "eq", "down")], "device")
+        assert result == [["conn_status", "==", 2]]
+
+    def test_task_state_name_is_coerced_to_its_code(self) -> None:
+        result, _ = compile_to_array([_c("state", "eq", "running")], "task")
+        assert result == [["state", "==", 1]]
+
+    def test_alias_resolves_before_emitting(self) -> None:
+        result, _ = compile_to_array([_c("serial_number", "eq", "FG100F0000")], "device")
+        assert result == [["sn", "==", "FG100F0000"]]
+
+    def test_values_are_not_quoted_because_they_travel_as_json(self) -> None:
+        result, _ = compile_to_array([_c("desc", "eq", 'has "quotes" and spaces')], "device")
+        assert result == [["desc", "==", 'has "quotes" and spaces']]
+
+    def test_not_in_becomes_one_negated_entry_per_value(self) -> None:
+        result, _ = compile_to_array([_c("name", "not_in", ["a", "b"])], "device")
+        assert result == [["name", "!=", "a"], ["name", "!=", "b"]]
+
+    def test_in_is_refused_rather_than_guessed(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            compile_to_array([_c("name", "in", ["a", "b"])], "device")
+        assert "one call per value" in str(exc.value)
+
+    def test_no_conditions_compiles_to_an_empty_list(self) -> None:
+        result, warnings = compile_to_array([], "device")
+        assert result == []
+        assert warnings == []
+
+    def test_unknown_device_field_raises_because_the_set_is_complete(self) -> None:
+        with pytest.raises(ValidationError):
+            compile_to_array([_c("not_a_device_field", "eq", "x")], "device")

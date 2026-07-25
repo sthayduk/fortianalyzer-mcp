@@ -173,3 +173,69 @@ def compile_to_string(
             clauses.append(f"{field} {_WORD_OPS[op]} {_quote(value, field)}")
 
     return " and ".join(clauses), warnings
+
+
+#: Array-dialect operator spellings. ``search_devices`` proves ``==`` and
+#: ``contain`` against a live appliance; the comparison operators follow the
+#: same FortiManager grammar.
+_ARRAY_OPS: dict[str, str] = {
+    "eq": "==",
+    "ne": "!=",
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+    "contains": "contain",
+    "not_contains": "!contain",
+}
+
+
+def compile_to_array(
+    conditions: Sequence[FilterCondition],
+    vocabulary: str,
+) -> tuple[list[list[object]], list[str]]:
+    """Compile conditions into the array dialect (dvmdb, config, task).
+
+    Entries are implicitly ANDed, the only combining form proven here --
+    ``search_devices`` and ``list_tasks`` both rely on it. Values are *not*
+    quoted or escaped: they travel as JSON scalars and are never interpolated
+    into a filter string, so the string dialect's injection boundary does not
+    apply.
+
+    ``in`` is refused rather than guessed. Its explicit OR-separator syntax is
+    documented for FortiManager but unexercised in this repo, and the tempting
+    fallback -- one ``contain`` over a shared prefix -- is wrong, because it
+    silently matches values the caller never asked for.
+
+    Returns:
+        ``(entries, warnings)``.
+
+    Raises:
+        ValidationError: on ``in``, a value/op mismatch, a boolean value, or an
+            unknown field.
+    """
+    entries: list[list[object]] = []
+    warnings: list[str] = []
+
+    for condition in conditions:
+        field, warning = resolve_field(vocabulary, condition.field)
+        if warning:
+            warnings.append(warning)
+
+        op = condition.op
+        if op in _ARRAY_OPS:
+            value = coerce_value(vocabulary, field, _scalar(condition))
+            entries.append([field, _ARRAY_OPS[op], value])
+            continue
+
+        if op == "not_in":
+            for item in _values(condition):
+                entries.append([field, "!=", coerce_value(vocabulary, field, item)])
+            continue
+
+        raise ValidationError(
+            f"Filter op '{op}' on '{field}' is not supported against this endpoint. "
+            "Issue one call per value instead."
+        )
+
+    return entries, warnings
