@@ -17,10 +17,18 @@ from fortianalyzer_mcp.query.fields import (
     get_vocabulary,
     resolve_field,
 )
+from fortianalyzer_mcp.query.filters import (
+    FilterCondition,
+    FilterOp,
+    compile_to_string,
+)
 
 __all__ = [
+    "FilterCondition",
+    "FilterOp",
     "Vocabulary",
     "coerce_value",
+    "compile_to_string",
     "get_vocabulary",
     "resolve_field",
 ]
