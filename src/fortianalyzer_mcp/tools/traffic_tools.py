@@ -11,7 +11,6 @@ aggregate results for policy hardening workflows.
 
 import asyncio
 import logging
-import re
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -34,6 +33,7 @@ from fortianalyzer_mcp.utils.validation import (
     ValidationError,
     build_device_filter,
     get_default_adom,
+    sanitize_filter_value,
     validate_adom,
 )
 
@@ -52,9 +52,6 @@ DEFAULT_TOP_N = 10
 
 # Valid action values for FortiGate traffic logs
 VALID_ACTIONS = frozenset({"accept", "deny", "close", "drop", "ip-conn", "timeout"})
-
-# Regex for safe unquoted filter values: alphanumeric, dots, hyphens
-_SAFE_UNQUOTED_RE = re.compile(r"^[a-zA-Z0-9.\-]+$")
 
 
 # =============================================================================
@@ -106,33 +103,6 @@ def validate_policy_ids(policy_ids: list[int]) -> list[int]:
         if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
             raise ValidationError(f"Invalid policy ID: {pid}. Must be a positive integer.")
     return policy_ids
-
-
-def sanitize_filter_value(value: str) -> str:
-    """Sanitize a value for use in FAZ log filter expressions.
-
-    Safe alphanumeric values (including dots and hyphens) are returned as-is.
-    All other values are quoted with internal backslashes and double quotes escaped.
-
-    Args:
-        value: Raw filter value.
-
-    Returns:
-        Sanitized value safe for use in filter expressions.
-
-    Raises:
-        ValidationError: If value is empty.
-    """
-    if not value:
-        raise ValidationError("Filter value cannot be empty")
-    value = value.strip()
-    if not value:
-        raise ValidationError("Filter value cannot be empty after stripping")
-    if _SAFE_UNQUOTED_RE.match(value):
-        return value
-    # Escape backslashes first, then double quotes, then wrap in quotes
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
 
 
 # =============================================================================

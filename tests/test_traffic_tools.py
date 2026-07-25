@@ -1328,3 +1328,19 @@ class TestPolicyPathEnsuresConnection:
         assert "ensure_connected" in events  # session was revived
         assert events.index("ensure_connected") < events.index("start")  # before any query
         assert result["results"][0]["observed_hits"] == 1
+
+
+class TestSanitiserIsShared:
+    """traffic_tools carried its own copy whose safe class omitted ':'."""
+
+    def test_traffic_sanitiser_is_the_shared_implementation(self) -> None:
+        from fortianalyzer_mcp.tools import traffic_tools
+        from fortianalyzer_mcp.utils import validation
+
+        assert traffic_tools.sanitize_filter_value is validation.sanitize_filter_value
+
+    def test_ipv6_literal_is_not_quoted(self) -> None:
+        """The old copy quoted every IPv6 address because ':' was unsafe to it."""
+        from fortianalyzer_mcp.tools import traffic_tools
+
+        assert traffic_tools.sanitize_filter_value("2001:db8::1") == "2001:db8::1"
