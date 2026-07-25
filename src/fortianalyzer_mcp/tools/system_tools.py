@@ -8,6 +8,7 @@ from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
 from fortianalyzer_mcp.server import get_faz_client, mcp
+from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.responses import redact
 from fortianalyzer_mcp.utils.validation import (
     get_default_adom,
@@ -62,7 +63,7 @@ def _get_client() -> FortiAnalyzerClient:
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_system_status() -> dict[str, Any]:
     """Get FortiAnalyzer system status and version information.
 
@@ -97,7 +98,7 @@ async def get_system_status() -> dict[str, Any]:
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_ha_status() -> dict[str, Any]:
     """Get FortiAnalyzer High Availability (HA) status.
 
@@ -134,7 +135,7 @@ async def get_ha_status() -> dict[str, Any]:
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_adoms(
     fields: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -171,7 +172,7 @@ async def list_adoms(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_adom(
     name: str,
     include_details: bool = False,
@@ -212,7 +213,7 @@ async def get_adom(
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_devices(
     adom: str | None = None,
     fields: list[str] | None = None,
@@ -254,7 +255,7 @@ async def list_devices(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_device(
     name: str,
     adom: str | None = None,
@@ -300,7 +301,7 @@ async def get_device(
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_tasks(
     filter_state: str | None = None,
 ) -> dict[str, Any]:
@@ -362,7 +363,7 @@ async def list_tasks(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_task(
     task_id: int,
     include_details: bool = False,
@@ -404,7 +405,7 @@ async def get_task(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def wait_for_task(
     task_id: int,
     timeout: int = 300,
@@ -477,7 +478,7 @@ async def wait_for_task(
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_api_ratelimit() -> dict[str, Any]:
     """Get the current API rate limiting configuration.
 
@@ -512,7 +513,7 @@ async def get_api_ratelimit() -> dict[str, Any]:
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def update_api_ratelimit(
     read_limit: int | None = None,
     write_limit: int | None = None,

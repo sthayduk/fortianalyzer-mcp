@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.tool_annotations import READ_ONLY_LOCAL, UNCONSTRAINED
 from fortianalyzer_mcp.utils.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ def health_check() -> str:
 def register_dynamic_tools(mcp_server: FastMCP) -> None:
     """Register discovery tools for dynamic mode only."""
 
-    @mcp_server.tool()
+    @mcp_server.tool(annotations=READ_ONLY_LOCAL)
     async def find_fortianalyzer_tool(operation: str) -> dict[str, Any]:
         """Discover FortiAnalyzer tools by operation name/keywords.
 
@@ -206,7 +207,10 @@ def register_dynamic_tools(mcp_server: FastMCP) -> None:
             "tools": results,
         }
 
-    @mcp_server.tool()
+    # Annotated as the union of everything it can dispatch to, not as the
+    # reader it superficially resembles: ``tool_name`` selects any tool in
+    # the catalogue below, ``delete_device`` included.
+    @mcp_server.tool(annotations=UNCONSTRAINED)
     async def execute_advanced_tool(
         tool_name: str,
         parameters: dict | None = None,
@@ -345,7 +349,7 @@ def register_dynamic_tools(mcp_server: FastMCP) -> None:
         tool_func = tool_map[tool_name]
         return await tool_func(**params)
 
-    @mcp_server.tool()
+    @mcp_server.tool(annotations=READ_ONLY_LOCAL)
     def list_fortianalyzer_categories() -> dict[str, Any]:
         """List FortiAnalyzer operation categories.
 

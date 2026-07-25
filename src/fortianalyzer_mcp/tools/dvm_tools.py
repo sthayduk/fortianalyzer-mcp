@@ -10,6 +10,7 @@ from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
 from fortianalyzer_mcp.server import get_faz_client, mcp
+from fortianalyzer_mcp.tool_annotations import CREATES, DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.responses import redact
 from fortianalyzer_mcp.utils.validation import (
     ValidationError,
@@ -35,7 +36,7 @@ def _get_client() -> FortiAnalyzerClient:
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_device_groups(
     adom: str | None = None,
 ) -> dict[str, Any]:
@@ -73,7 +74,7 @@ async def list_device_groups(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def list_device_vdoms(
     device: str,
     adom: str | None = None,
@@ -120,7 +121,7 @@ async def list_device_vdoms(
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 async def add_device(
     adom: str,
     name: str,
@@ -232,7 +233,7 @@ async def add_device(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def delete_device(
     adom: str,
     device: str,
@@ -284,7 +285,7 @@ async def delete_device(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 async def add_devices_bulk(
     adom: str,
     devices: list[dict[str, Any]],
@@ -360,7 +361,7 @@ async def add_devices_bulk(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def delete_devices_bulk(
     adom: str,
     devices: list[str],
@@ -424,7 +425,7 @@ async def delete_devices_bulk(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_device_info(
     device: str,
     adom: str | None = None,
@@ -474,7 +475,7 @@ async def get_device_info(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def search_devices(
     adom: str | None = None,
     name_filter: str | None = None,

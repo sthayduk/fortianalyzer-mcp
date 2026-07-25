@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 
 from fortianalyzer_mcp.server import get_faz_client, mcp
+from fortianalyzer_mcp.tool_annotations import READ_ONLY
 from fortianalyzer_mcp.tools.log_tools import (
     _clamp_limit,
     _run_logsearch_page,
@@ -734,7 +735,7 @@ async def _run_bounded_policy_analysis(
 # =============================================================================
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_policy_traffic_profile(
     adom: str | None = None,
     device: str | None = None,
@@ -801,7 +802,7 @@ async def get_policy_traffic_profile(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_policy_port_analysis(
     adom: str | None = None,
     device: str | None = None,
@@ -871,7 +872,7 @@ async def get_policy_port_analysis(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_policy_protocol_summary(
     adom: str | None = None,
     device: str | None = None,

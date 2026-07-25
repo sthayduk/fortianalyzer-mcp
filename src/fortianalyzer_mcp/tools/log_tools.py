@@ -10,6 +10,7 @@ from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
 from fortianalyzer_mcp.server import get_faz_client, mcp
+from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.log_clock import resolve_time_window
 from fortianalyzer_mcp.utils.responses import build_warnings, coerce_num, error_response, redact
 from fortianalyzer_mcp.utils.time_range import parse_time_range
@@ -399,7 +400,7 @@ async def _parse_time_range(time_range: str) -> dict[str, str]:
 _build_device_filter = build_device_filter
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def query_logs(
     adom: str | None = None,
     logtype: str = "traffic",
@@ -660,7 +661,7 @@ async def query_logs(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_log_search_progress(
     adom: str | None = None,
     tid: int = 0,
@@ -707,7 +708,7 @@ async def get_log_search_progress(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def fetch_more_logs(
     adom: str | None = None,
     tid: int = 0,
@@ -964,7 +965,7 @@ async def fetch_more_logs(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 async def cancel_log_search(
     adom: str | None = None,
     tid: int = 0,
@@ -1026,7 +1027,7 @@ async def cancel_log_search(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_log_stats(
     adom: str | None = None,
     device: str | None = None,
@@ -1063,7 +1064,7 @@ async def get_log_stats(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_log_fields(
     adom: str | None = None,
     logtype: str = "traffic",
@@ -1102,7 +1103,7 @@ async def get_log_fields(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def search_traffic_logs(
     adom: str | None = None,
     srcip: str | None = None,
@@ -1209,7 +1210,7 @@ async def search_traffic_logs(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def search_security_logs(
     adom: str | None = None,
     attack_name: str | None = None,
@@ -1302,7 +1303,7 @@ async def search_security_logs(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def search_event_logs(
     adom: str | None = None,
     subtype: str | None = None,
@@ -1393,7 +1394,7 @@ async def search_event_logs(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_logfiles_state(
     adom: str | None = None,
     device: str | None = None,
@@ -1443,7 +1444,7 @@ async def get_logfiles_state(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_pcap_file(
     log_data: str,
     key_type: str = "log-data",
