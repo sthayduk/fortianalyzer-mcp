@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_array
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.responses import redact
@@ -320,6 +321,7 @@ async def get_device(
 @mcp.tool(annotations=READ_ONLY)
 async def list_tasks(
     filter_state: str | None = None,
+    filters: list[FilterCondition] | None = None,
 ) -> dict[str, Any]:
     """List all tasks in FortiAnalyzer.
 
@@ -334,6 +336,11 @@ async def list_tasks(
             - "error": Failed
             - "cancelling": Being cancelled
             - "cancelled": Cancelled
+        filters: Structured conditions, each {field, op, value}, ANDed with
+            filter_state. Fields: id, title, src, user, adom, state, percent,
+            num_done, num_err, num_lines, num_warn, start_tm, end_tm.
+            Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, not_in.
+            Example: [{"field": "state", "op": "eq", "value": "running"}]
 
     Returns:
         dict: Task list with keys:
@@ -357,7 +364,7 @@ async def list_tasks(
         # Build filter if state specified. FAZ stores state as a numeric code,
         # so translate the documented state names before filtering; a name the
         # enum doesn't know is rejected instead of silently matching nothing.
-        filter_list = None
+        entries: list[list[Any]] = []
         if filter_state:
             state_code = _TASK_STATE_CODES.get(filter_state.strip().lower())
             if state_code is None:
@@ -366,7 +373,11 @@ async def list_tasks(
                     "status": "error",
                     "message": f"Invalid filter_state '{filter_state}'. Must be one of: {valid}",
                 }
-            filter_list = [["state", "==", state_code]]
+            entries.append(["state", "==", state_code])
+        if filters:
+            structured, _ = compile_to_array(filters, "task")
+            entries.extend(structured)
+        filter_list = entries or None
 
         tasks = await client.list_tasks(filter=filter_list)
         return {

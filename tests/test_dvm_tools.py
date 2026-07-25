@@ -1,8 +1,12 @@
 """Tests for FortiAnalyzer DVM (Device Manager) tools."""
 
+from typing import Any
+
 import pytest
 
+import fortianalyzer_mcp.tools.dvm_tools as dvm_tools
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.query.filters import FilterCondition
 
 
 class TestDVMTools:
@@ -87,3 +91,74 @@ class TestDVMTools:
         ]
         result = await mock_client_configured.delete_device_list(adom="root", devices=devices)
         assert result is not None
+
+
+class TestSearchDevicesStructuredFilters:
+    """filters compiles to the array dialect and composes with the old params."""
+
+    class FakeClient:
+        """Captures the filter search_devices hands to the client."""
+
+        def __init__(self) -> None:
+            self.captured: list[list[Any]] | None = None
+
+        async def list_devices(
+            self, adom: str, filter: list[list[Any]] | None = None
+        ) -> list[dict[str, Any]]:
+            self.captured = filter
+            return []
+
+    def _install(self, monkeypatch: pytest.MonkeyPatch) -> FakeClient:
+        fake = self.FakeClient()
+        monkeypatch.setattr(dvm_tools, "_get_client", lambda: fake)
+        return fake
+
+    async def test_filters_compile_to_array_entries(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = self._install(monkeypatch)
+
+        await dvm_tools.search_devices(
+            filters=[FilterCondition(field="os_version", op="contains", value="7.6")]
+        )
+
+        assert fake.captured == [["os_ver", "contain", "7.6"]]
+
+    async def test_enum_name_is_coerced(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = self._install(monkeypatch)
+
+        await dvm_tools.search_devices(
+            filters=[FilterCondition(field="conn_status", op="eq", value="down")]
+        )
+
+        assert fake.captured == [["conn_status", "==", 2]]
+
+    async def test_structured_and_narrow_params_are_anded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = self._install(monkeypatch)
+
+        await dvm_tools.search_devices(
+            name_filter="fgt",
+            filters=[FilterCondition(field="os_version", op="contains", value="7.6")],
+        )
+
+        assert fake.captured is not None
+        assert ["name", "contain", "fgt"] in fake.captured
+        assert ["os_ver", "contain", "7.6"] in fake.captured
+
+    async def test_unknown_device_field_is_rejected_locally(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The field set is enumerable, so this never reaches the appliance."""
+
+        class Unreachable:
+            async def list_devices(self, **kwargs: Any) -> list[dict[str, Any]]:
+                raise AssertionError("must not reach the API")
+
+        monkeypatch.setattr(dvm_tools, "_get_client", lambda: Unreachable())
+
+        result = await dvm_tools.search_devices(
+            filters=[FilterCondition(field="not_a_field", op="eq", value="x")]
+        )
+
+        assert result["status"] == "error"
+        assert "conn_status" in result["message"]

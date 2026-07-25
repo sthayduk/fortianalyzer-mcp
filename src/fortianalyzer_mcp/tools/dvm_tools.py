@@ -9,6 +9,8 @@ import logging
 from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.query.fields import coerce_value, get_vocabulary
+from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_array
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import CREATES, DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.responses import redact
@@ -482,6 +484,7 @@ async def search_devices(
     platform_filter: str | None = None,
     os_version_filter: str | None = None,
     connection_status: str | None = None,
+    filters: list[FilterCondition] | None = None,
 ) -> dict[str, Any]:
     """Search for devices with filters.
 
@@ -491,6 +494,11 @@ async def search_devices(
         platform_filter: Filter by platform type
         os_version_filter: Filter by OS version
         connection_status: Filter by connection status ("up", "down")
+        filters: Structured conditions, each {field, op, value}, ANDed with the
+            narrow parameters above. Fields: name, ip, sn, hostname, desc,
+            os_ver, platform_str, conn_status, dev_status, mgmt_mode, vdom.
+            Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, not_in.
+            Example: [{"field": "os_ver", "op": "contains", "value": "7.6"}]
 
     Returns:
         dict: Search results with keys:
@@ -511,31 +519,37 @@ async def search_devices(
         client = _get_client()
 
         # Build filter list
-        filters: list[list[Any]] = []
+        entries: list[list[Any]] = []
         if name_filter:
-            filters.append(["name", "contain", name_filter])
+            entries.append(["name", "contain", name_filter])
         if platform_filter:
-            filters.append(["platform_str", "contain", platform_filter])
+            entries.append(["platform_str", "contain", platform_filter])
         if os_version_filter:
-            filters.append(["os_ver", "contain", os_version_filter])
+            entries.append(["os_ver", "contain", os_version_filter])
         if connection_status:
-            # DVMDB conn_status enum: 0=unknown, 1=up, 2=down. Reject anything
-            # else instead of silently coercing typos to a wrong filter.
-            conn_status_map = {"unknown": 0, "up": 1, "down": 2}
-            status_val = conn_status_map.get(connection_status.strip().lower())
-            if status_val is None:
-                valid = ", ".join(sorted(conn_status_map))
+            # Coercion lives in the query vocabulary now, so "down" means 2
+            # here and everywhere else that filters on conn_status. The
+            # rejection is re-phrased in terms of this parameter's own name:
+            # a caller who passed connection_status= should not be told about
+            # a field called conn_status they never mentioned.
+            try:
+                status_val = coerce_value("device", "conn_status", connection_status)
+            except ValidationError:
+                valid = ", ".join(sorted(get_vocabulary("device").coercions["conn_status"]))
                 return {
                     "status": "error",
                     "message": (
                         f"Invalid connection_status '{connection_status}'. Must be one of: {valid}"
                     ),
                 }
-            filters.append(["conn_status", "==", status_val])
+            entries.append(["conn_status", "==", status_val])
+        if filters:
+            structured, _ = compile_to_array(filters, "device")
+            entries.extend(structured)
 
         devices = await client.list_devices(
             adom=adom,
-            filter=filters if filters else None,
+            filter=entries if entries else None,
         )
 
         return {
