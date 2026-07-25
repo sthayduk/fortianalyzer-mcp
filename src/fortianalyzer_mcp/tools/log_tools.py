@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_string
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
 from fortianalyzer_mcp.utils.log_clock import resolve_time_window
@@ -407,6 +408,7 @@ async def query_logs(
     device: str | None = None,
     time_range: str = "1-hour",
     filter: str | None = None,
+    filters: list[FilterCondition] | None = None,
     limit: int = 100,
     offset: int = 0,
     timeout: int = DEFAULT_SEARCH_TIMEOUT,
@@ -454,6 +456,15 @@ async def query_logs(
         filter: Log filter expression (optional).
             Example: "srcip==10.0.0.1 and dstport==443"
             Operators: ==, !=, <, >, <=, >=, contain, !contain
+        filters: Structured filter conditions, each {field, op, value} —
+            preferred over `filter` because the field names are validated here
+            and the operator spelling is handled for you. Mutually exclusive
+            with `filter`.
+            Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, in, not_in.
+            Example: [{"field": "srcip", "op": "eq", "value": "10.0.0.1"},
+                      {"field": "dstport", "op": "in", "value": [80, 443]}]
+            English field names are accepted where unambiguous (source_ip,
+            destination_port, application); get_log_fields lists the rest.
         limit: Maximum logs to return (default: 100, max: 1000)
         offset: Offset for pagination (default: 0)
         timeout: Search timeout in seconds (default: 60)
@@ -482,6 +493,8 @@ async def query_logs(
             - next_offset: Offset to pass to fetch_more_logs, or None when has_more is False
             - logs: List of log entries (bounded by `limit`)
             - adom, logtype, filter, device: Echoed query context (auditability)
+            - filter: The filter string actually sent to FortiAnalyzer (the
+              compiled form when `filters` was used)
             - time_range: Resolved {start, end} bounds actually sent to FAZ
             - timezone: FAZ system timezone the timestamps are interpreted in
             - time_basis: Human note clarifying timestamps are FAZ local time
@@ -512,6 +525,24 @@ async def query_logs(
         # Validate inputs
         adom = validate_adom(adom or get_default_adom())
         logtype = validate_log_type(logtype)
+
+        filter_warnings: list[str] = []
+        if filters and filter:
+            return error_response(
+                error="conflicting_filter_input",
+                message=(
+                    "Pass either 'filters' (structured conditions) or 'filter' (a raw "
+                    "FortiAnalyzer filter string), not both."
+                ),
+                operation="query_logs",
+                adom=adom,
+                logtype=logtype,
+                recommendation=(
+                    "Use 'filters' unless you need syntax it cannot express, such as a regex match."
+                ),
+            )
+        if filters:
+            filter, filter_warnings = compile_to_string(filters, logtype)
 
         client = _get_client()
         await client.ensure_connected()
@@ -595,6 +626,7 @@ async def query_logs(
             timezone=tz_name,
             has_more=has_more,
         )
+        warnings.extend(filter_warnings)
         if count == 0 and total_is_known and total is not None and total > offset:
             warnings.append(
                 "FortiAnalyzer reports more matching rows beyond this offset but returned "
