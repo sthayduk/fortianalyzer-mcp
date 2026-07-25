@@ -417,6 +417,16 @@ async def query_logs(
     1. Start search task (returns TID)
     2. Poll for results until complete
 
+    Prefer a narrower tool where one fits:
+        - Filtering only on srcip/dstip/srcport/dstport/action/policy_id ->
+          search_traffic_logs builds the filter string for you.
+        - "How much traffic did policy N carry" -> get_policy_traffic_profile,
+          get_policy_port_analysis or get_policy_protocol_summary. They
+          aggregate on the appliance and report their own exactness; paging
+          raw rows to answer a volume question wastes the context it costs.
+        - IPS/attack events, especially with PCAP -> search_ips_logs.
+        - Unsure what is filterable -> get_log_fields(name_filter="...").
+
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)
         logtype: Log type to query. Options:
@@ -1184,7 +1194,12 @@ async def search_traffic_logs(
     """Search traffic logs with common filter criteria.
 
     Convenience function for searching traffic logs with typical
-    network-based filters.
+    network-based filters. Wraps query_logs, so the returned `tid` is the same
+    reusable pagination handle and works with fetch_more_logs.
+
+    Prefer get_policy_traffic_profile over this when the question is how much
+    a policy carried rather than which rows matched -- it aggregates on the
+    appliance instead of returning rows to be counted here.
 
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)
@@ -1290,6 +1305,11 @@ async def search_security_logs(
 
     Search for security events including intrusion attempts,
     malware detections, and other security-related logs.
+
+    For IPS specifically, search_ips_logs filters on more dimensions (CVE,
+    PCAP availability, multiple severities at once) and its results feed the
+    PCAP downloaders. Use this one when you want a single logtype's events
+    across the broader security vocabularies.
 
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)

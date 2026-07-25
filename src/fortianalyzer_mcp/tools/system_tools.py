@@ -144,8 +144,15 @@ async def list_adoms(
     ADOMs are used to partition FortiAnalyzer into separate management
     domains, each with its own devices, logs, and configurations.
 
+    Pass `fields` unless you genuinely need the full object. The default is
+    every field the appliance defines -- around 35 per ADOM, most of them
+    empty placeholders (unused IPv6 DNS slots, blank descriptions,
+    tab_status, logview_customize). fields=["name", "state"] answers "which
+    ADOMs exist and are they enabled" for a fraction of the response.
+
     Args:
-        fields: Specific fields to return (optional, returns all if not specified)
+        fields: Specific fields to return. Recommended: ["name", "state"].
+            Omitting this returns every field, which is rarely what you want.
 
     Returns:
         dict: ADOM list with keys:
@@ -223,9 +230,18 @@ async def list_devices(
     FortiAnalyzer collects logs from FortiGate and other Fortinet devices.
     This lists all devices configured to send logs to this ADOM.
 
+    Pass `fields` unless you genuinely need the full object. The default is
+    roughly 60 fields per device, including credential keys returned as
+    "***REDACTED***" placeholders and unused mgmt.__data zero-arrays.
+    fields=["name", "ip", "os_ver", "platform_str"] covers most inventory
+    questions; add "sn" for serial numbers, which is also what `device`
+    filters on elsewhere in this server.
+
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)
-        fields: Specific fields to return (optional)
+        fields: Specific fields to return. Recommended:
+            ["name", "ip", "os_ver", "platform_str"]. Omitting this returns
+            every field, which is rarely what you want.
 
     Returns:
         dict: Device list with keys:

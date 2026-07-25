@@ -750,6 +750,16 @@ async def get_policy_traffic_profile(
     ports, services, and applications. Useful for understanding what traffic
     a policy is actually handling.
 
+    Prefer this over query_logs/search_traffic_logs for any per-policy volume
+    question: aggregation happens during the scan, so the answer costs a
+    summary rather than thousands of rows. Siblings: get_policy_port_analysis
+    (port detail only) and get_policy_protocol_summary (protocol mix). Drop to
+    search_traffic_logs only when you need the individual rows.
+
+    Check `is_exact` before quoting numbers. When it is False the scan hit a
+    row cap, `analysis_mode` is "bounded_sample", and `total_hits` is a floor
+    rather than a count -- see `total_hits_is_known`/`total_hit_source`.
+
     Args:
         adom: ADOM name (default: from config DEFAULT_ADOM)
         device: Device filter (serial number like "FG100FTK19001333" or name).
