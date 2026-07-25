@@ -225,28 +225,37 @@ class TestQueryLogsStructuredFilters:
     async def test_filters_compile_into_the_sent_filter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Alias resolution, `in` grouping and the AND join reach the wire.
+
+        Deliberately filters on ports rather than an IP: with MASKING_ENABLED
+        the arg unmasker treats any value in an IP-typed field as a token and
+        rewrites it (the documented "IP wrinkle" in masking/unmask.py), which
+        would make this assertion config-dependent. The IP path through the
+        compiler is covered in tests/test_query_filters.py, where no tool
+        wrapper is in play.
+        """
         captured = self._install(monkeypatch)
 
         result = await log_tools.query_logs(
             logtype="traffic",
             time_range=self.CUSTOM_RANGE,
             filters=[
-                FilterCondition(field="source_ip", op="eq", value="10.0.0.1"),
+                FilterCondition(field="source_port", op="eq", value=8080),
                 FilterCondition(field="dstport", op="in", value=[80, 443]),
             ],
         )
 
-        assert captured["filter"] == "srcip==10.0.0.1 and (dstport==80 or dstport==443)"
-        assert result["filter"] == "srcip==10.0.0.1 and (dstport==80 or dstport==443)"
+        assert captured["filter"] == "srcport==8080 and (dstport==80 or dstport==443)"
+        assert result["filter"] == "srcport==8080 and (dstport==80 or dstport==443)"
 
     async def test_raw_filter_still_works_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured = self._install(monkeypatch)
 
         await log_tools.query_logs(
-            logtype="traffic", time_range=self.CUSTOM_RANGE, filter="srcip==10.0.0.1"
+            logtype="traffic", time_range=self.CUSTOM_RANGE, filter="dstport==443"
         )
 
-        assert captured["filter"] == "srcip==10.0.0.1"
+        assert captured["filter"] == "dstport==443"
 
     async def test_both_filter_forms_is_a_conflict_error(self) -> None:
         result = await log_tools.query_logs(
