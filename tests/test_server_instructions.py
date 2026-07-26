@@ -44,8 +44,10 @@ TID_FAMILIES = {
 
 #: The FortiAnalyzer filter grammar the server itself emits. The raw
 #: ``filter`` string remains an escape hatch, so the operator set belongs
-#: where it is read up front.
-FILTER_OPERATORS = ("==", "!=", "<=", ">=", "contain", "!contain")
+#: where it is read up front. Substring matching emits ``like`` on both
+#: dialects: the appliance accepts ``contain``/``!contain`` and then silently
+#: matches zero rows, so neither is emitted any more and neither belongs here.
+FILTER_OPERATORS = ("==", "!=", "<=", ">=", "like")
 
 #: The ``filters`` op vocabulary. This is the surface a caller must get
 #: right, and it is validated locally, so it is the more load-bearing list.

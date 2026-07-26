@@ -75,8 +75,10 @@ entries.
 `filter` still accepts a raw FortiAnalyzer expression for syntax `filters`
 cannot express, and the two are mutually exclusive -- passing both is an error
 rather than a silently merged filter. The operators the server emits are `==`,
-`!=`, `<`, `>`, `<=`, `>=`, `contain` and `!contain`, combined with `and`/`or`
-and grouped with parentheses. FortiAnalyzer's own parser accepts more than
+`!=`, `<`, `>`, `<=`, `>=` and `like` with `%` wildcards, combined with
+`and`/`or` and grouped with parentheses. Prefer `filters` over hand-writing a
+raw `contain` clause: the parser accepts `contain` and then matches nothing,
+so it fails silently rather than erroring. FortiAnalyzer's own parser accepts more than
 that, but nothing beyond this set is verified against this API here, so treat
 anything else as an experiment you run through `filter`.
 

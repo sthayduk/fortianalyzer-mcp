@@ -15,12 +15,12 @@ consistent: before this existed the repo spelled "contains" two ways
 two sanitisers with different safe-character classes.
 
 Only operator spellings with working evidence against a live appliance are
-emitted. FortiAnalyzer 7.0.1 also documents ``like``, ``~``, ``!~``, ``isnull``,
+emitted. FortiAnalyzer 7.0.1 also documents ``~``, ``!~``, ``isnull``,
 ``isnotnull`` and ``<>`` for its Log View parser, but none is exercised through
 JSON-RPC on the *string* dialect, so they are deliberately absent there until a
-live check confirms them -- see the spec's verification items. (``like`` IS
-proven on the array dialect, where it is how ``contains`` compiles; the
-documented ``contain`` spelling silently matches zero rows there.) The op set
+live check confirms them -- see the spec's verification items. ``like`` IS now
+proven on both dialects and is how ``contains`` compiles on each: the
+documented ``contain`` spelling silently matches zero rows on both. The op set
 is data, so adding one later is a one-line change.
 
 Quoting is a *string-dialect* concern only. Array-dialect values travel as JSON
@@ -60,11 +60,26 @@ _SYMBOL_OPS: dict[str, str] = {
     "lte": "<=",
 }
 
-#: Ops that emit as a bare word and need spaces (``attack contain Botnet``).
-_WORD_OPS: dict[str, str] = {
-    "contains": "contain",
-    "not_contains": "!contain",
-}
+#: Substring ops. The string dialect compiles these to ``like`` with ``%``
+#: wildcards for the same reason the array dialect already does: the documented
+#: ``contain``/``!contain`` spellings are accepted by the parser and silently
+#: match zero rows, so a caller filtering with them gets a confident empty
+#: answer instead of an error.
+#:
+#: Probed live on 7.6.7 and 8.0.0 over one fixed hour of traffic, 488444 rows:
+#:
+#:     service==DNS              12052      service contain DNS        0
+#:     service like "%DNS%"      12052      service !contain DNS       0
+#:     !(service like "%DNS%")  476392
+#:
+#: 12052 + 476392 is exactly 488444, so the wrapped form is a true complement
+#: rather than a match-everything. A predicate and its negation BOTH returning
+#: zero is what proves ``contain`` inert rather than merely strict: the parser
+#: does not reject operators it does not know, and a nonsense ``service zzqq
+#: DNS`` behaves identically. Genuine syntax errors do surface, which is why
+#: negation has to wrap the clause: ``not like``, ``!like`` and ``nlike`` are
+#: each rejected with ``Invalid filter``.
+_LIKE_OPS = frozenset({"contains", "not_contains"})
 
 _MULTI_VALUE_OPS = frozenset({"in", "not_in"})
 
@@ -81,7 +96,11 @@ class FilterCondition(BaseModel):
 
     field: str
     op: FilterOp = "eq"
-    value: str | bool | int | float | list[str | int]
+    # ``bool`` is listed in the list arm as well as the scalar arm so that
+    # ``_reject_bool`` can actually see one. Without it pydantic coerces True
+    # to 1 on the way in, and the same boolean that errors as a scalar becomes
+    # a silent ``dstport==1`` inside a list.
+    value: str | bool | int | float | list[str | bool | int]
 
 
 def _reject_bool(field: str, value: object) -> None:
@@ -171,8 +190,15 @@ def compile_to_string(
         value = coerce_value(vocabulary, field, _scalar(condition))
         if op in _SYMBOL_OPS:
             clauses.append(f"{field}{_SYMBOL_OPS[op]}{_quote(value, field)}")
-        else:
-            clauses.append(f"{field} {_WORD_OPS[op]} {_quote(value, field)}")
+        elif op in _LIKE_OPS:
+            # The wildcards go through the sanitiser with the value, so the
+            # whole pattern is escaped and quoted as one literal and cannot
+            # terminate its own clause. Live-checked that a quoted pattern
+            # matches identically to a bare one.
+            clause = f"{field} like {_quote(f'%{value}%', field)}"
+            clauses.append(f"!({clause})" if op == "not_contains" else clause)
+        else:  # pragma: no cover - every op in the enum is handled above
+            raise ValidationError(f"Filter op '{op}' is not supported on the string dialect.")
 
     return " and ".join(clauses), warnings
 

@@ -36,13 +36,28 @@ class TestStringDialectOperators:
         result, _ = compile_to_string([_c("srcip", op, "10.0.0.1")], "traffic")
         assert result == expected
 
-    def test_contains_emits_the_word_operator_with_spaces(self) -> None:
+    def test_contains_compiles_to_like_with_wildcards(self) -> None:
+        """``contain`` is inert on the string dialect, exactly as on the array
+        one: the parser accepts it and silently matches zero rows, so a caller
+        gets a confident empty answer. ``like`` with wildcards is the form that
+        works, live-checked on 7.6.7 and 8.0.0."""
         result, _ = compile_to_string([_c("attack", "contains", "Botnet")], "attack")
-        assert result == "attack contain Botnet"
+        assert result == 'attack like "%Botnet%"'
 
-    def test_not_contains_emits_the_negated_word_operator(self) -> None:
+    def test_not_contains_wraps_the_like_clause(self) -> None:
+        """Negation has to wrap the clause. ``not like``, ``!like`` and
+        ``nlike`` are each rejected live with ``Invalid filter``; the wrapped
+        form is a true complement (12052 + 476392 == 488444 over one fixed
+        hour), not a match-everything."""
         result, _ = compile_to_string([_c("attack", "not_contains", "Botnet")], "attack")
-        assert result == "attack !contain Botnet"
+        assert result == '!(attack like "%Botnet%")'
+
+    def test_a_substring_value_is_escaped_inside_the_pattern(self) -> None:
+        """The wildcards go through the sanitiser with the value, so a quote in
+        the value cannot terminate the pattern's own literal."""
+        result, _ = compile_to_string([_c("attack", "contains", 'a" or 1==1 or "')], "attack")
+        assert result == 'attack like "%a\\" or 1==1 or \\"%"'
+        assert result.count('"') - result.count('\\"') == 2
 
 
 class TestStringDialectCombination:
@@ -88,7 +103,7 @@ class TestValueHandling:
 
     def test_values_with_spaces_are_quoted(self) -> None:
         result, _ = compile_to_string([_c("attack", "contains", "Remote Code")], "attack")
-        assert result == 'attack contain "Remote Code"'
+        assert result == 'attack like "%Remote Code%"'
 
     def test_injection_attempt_is_neutralised_by_quoting(self) -> None:
         result, _ = compile_to_string([_c("srcip", "eq", '1.1.1.1" or 1==1 or "')], "traffic")
@@ -120,6 +135,22 @@ class TestInputRejection:
     def test_boolean_value_raises(self) -> None:
         with pytest.raises(ValidationError) as exc:
             compile_to_string([_c("srcip", "eq", True)], "traffic")
+        assert "boolean" in str(exc.value).lower()
+
+    def test_a_boolean_inside_a_list_raises_the_same_way(self) -> None:
+        """The list arm has to admit ``bool`` for the guard to see one.
+
+        While it did not, pydantic coerced True to 1 on the way in and the
+        same boolean that errors as a scalar compiled to a silent
+        ``dstport==1``: one input shape, two opposite behaviours.
+        """
+        with pytest.raises(ValidationError) as exc:
+            compile_to_string([_c("dstport", "in", [True, False])], "traffic")
+        assert "boolean" in str(exc.value).lower()
+
+    def test_a_boolean_inside_a_list_raises_on_the_array_dialect_too(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            compile_to_array([_c("name", "not_in", [True])], "device")
         assert "boolean" in str(exc.value).lower()
 
     def test_unknown_op_is_rejected_by_the_model(self) -> None:
