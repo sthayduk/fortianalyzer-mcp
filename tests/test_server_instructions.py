@@ -157,6 +157,18 @@ def test_filters_parameter_is_named(instructions: str) -> None:
     assert "filters" in instructions
 
 
+def test_in_is_caveated_for_the_array_dialect_tools(instructions: str) -> None:
+    """``in`` hard-errors on search_devices/list_tasks (compile_to_array
+    refuses it), so a guide listing ``in`` unqualified beside "the same
+    filters parameter" promises an op that fails on two of its consumers.
+    The remedy phrase is asserted because it matches the error the caller
+    would otherwise hit blind.
+    """
+    assert "search_devices" in instructions
+    assert "list_tasks" in instructions
+    assert "one call per value" in instructions
+
+
 def test_unverified_operators_are_not_advertised(instructions: str) -> None:
     """like/regex/isnull are documented by Fortinet but unproven through the
     API here, so the guide must not promise them.
