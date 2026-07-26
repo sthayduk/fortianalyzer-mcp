@@ -13,7 +13,7 @@ auto-approval on those hints has no way to distinguish a status read from `delet
 useful behaviour (approve readers freely, confirm writers) collapses into confirming everything or
 confirming nothing.
 
-The tools split unevenly: 73 are pure readers, 14 change FortiAnalyzer state, and one
+The tools split unevenly: 72 are pure readers, 14 change FortiAnalyzer state, and one
 (`execute_advanced_tool`) dispatches to any tool by name. Two classes sit on the boundary and decide
 what "read-only" means here:
 

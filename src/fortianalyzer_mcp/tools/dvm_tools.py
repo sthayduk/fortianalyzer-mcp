@@ -496,7 +496,8 @@ async def search_devices(
         connection_status: Filter by connection status ("up", "down")
         filters: Structured conditions, each {field, op, value}, ANDed with the
             narrow parameters above. Fields: name, ip, sn, hostname, desc,
-            os_ver, platform_str, conn_status, dev_status, mgmt_mode, vdom.
+            os_ver, mr, patch, platform_str, conn_status, dev_status,
+            mgmt_mode, adm_usr, vdom, hdisk_size, build.
             Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, not_in.
             Example: [{"field": "os_ver", "op": "contains", "value": "7.6"}]
 
