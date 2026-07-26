@@ -56,6 +56,30 @@ LIVE_SHAPE: dict[str, Any] = {
 }
 
 
+#: The wrapping the live 7.6.x appliance actually returns: the field lists sit
+#: one level deeper, inside a ``data[0]`` wrapper object that carries scalar
+#: siblings and no ``name`` key of its own. Probed live; the flatter
+#: ``LIVE_SHAPE`` above is kept as the degenerate case, not the common one.
+NESTED_LIVE_SHAPE: dict[str, Any] = {
+    "data": [
+        {
+            "index": 0,
+            "logtype": "traffic",
+            "field": [
+                {"name": "srcip", "type": 6},
+                {"name": "dstip", "type": 6},
+                {"name": "srcport", "type": 4},
+                {"name": "action", "type": 0},
+            ],
+            "private-field": [
+                {"name": "srcintfrole", "type": 0},
+                {"name": "dstintfrole", "type": 0},
+            ],
+        }
+    ]
+}
+
+
 def _install(monkeypatch: pytest.MonkeyPatch, fake: FakeFaz) -> None:
     monkeypatch.setattr(log_tools, "get_faz_client", lambda: fake)
 
@@ -202,3 +226,33 @@ class TestMalformedPayloads:
 
         assert result["status"] == "success"
         assert [entry["name"] for entry in result["fields"]] == ["srcip"]
+
+
+class TestNestedLiveShape:
+    """The 7.6.x wrapper: field lists nested inside a data[0] object.
+
+    The wrapper dict carries no ``name`` key, so a walk that only inspects a
+    list's direct entries judges ``data`` "not a field list" and passes the
+    whole payload through -- zero counts, no filtering. Measured live: 234
+    public + 26 private traffic fields, all unreachable to name_filter.
+    """
+
+    async def test_counts_reach_nested_field_lists(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install(monkeypatch, FakeFaz(NESTED_LIVE_SHAPE))
+
+        result = await log_tools.get_log_fields(adom="root")
+
+        assert result["total_field_count"] == 6
+        assert result["field_count"] == 6
+
+    async def test_filter_narrows_nested_field_lists(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install(monkeypatch, FakeFaz(NESTED_LIVE_SHAPE))
+
+        result = await log_tools.get_log_fields(adom="root", name_filter="src")
+
+        wrapper = result["fields"]["data"][0]
+        assert [e["name"] for e in wrapper["field"]] == ["srcip", "srcport"]
+        assert [e["name"] for e in wrapper["private-field"]] == ["srcintfrole"]
+        assert wrapper["logtype"] == "traffic", "non-list siblings must survive"
+        assert result["field_count"] == 3
+        assert result["total_field_count"] == 6

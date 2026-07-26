@@ -1106,16 +1106,26 @@ async def get_log_stats(
         return {"status": "error", "message": redact(str(e))}
 
 
+def _is_field_list(payload: list[Any]) -> bool:
+    """A field list is a list holding dicts that carry ``name``."""
+    return any(isinstance(entry, dict) and "name" in entry for entry in payload)
+
+
 def _count_field_entries(payload: Any) -> int:
     """Count field definitions across every field list in a logfields payload.
 
-    The appliance returns more than one list (a public list and a private-field
-    list), so a count taken off a single key would understate the response.
+    The appliance returns more than one list (a public ``field`` list and a
+    ``private-field`` list), and on live 7.6.x both sit *inside* a wrapper
+    object under ``data`` (``data[0].field``) whose own keys carry no ``name``
+    -- so the walk must recurse into list elements, not just count a list's
+    direct entries, or the whole catalogue counts as zero.
     """
     if isinstance(payload, dict):
         return sum(_count_field_entries(value) for value in payload.values())
     if isinstance(payload, list):
-        return sum(1 for entry in payload if isinstance(entry, dict) and "name" in entry)
+        if _is_field_list(payload):
+            return sum(1 for entry in payload if isinstance(entry, dict) and "name" in entry)
+        return sum(_count_field_entries(entry) for entry in payload)
     return 0
 
 
@@ -1123,19 +1133,24 @@ def _filter_field_entries(payload: Any, needle: str) -> Any:
     """Return a copy of ``payload`` keeping only fields whose name matches.
 
     Copies rather than editing in place: the payload belongs to the client
-    call, and a future caching layer would inherit any mutation. Lists that
-    are not field lists (no dicts carrying ``name``) pass through untouched
-    so a shape change on the appliance degrades to a no-op, never a crash.
+    call, and a future caching layer would inherit any mutation. A list that
+    is not itself a field list is recursed element-wise -- the live 7.6.x
+    payload nests the field lists inside ``data[0]`` -- while scalar entries
+    pass through untouched, so a shape change on the appliance degrades to a
+    no-op, never a crash.
     """
     if isinstance(payload, dict):
         return {key: _filter_field_entries(value, needle) for key, value in payload.items()}
     if isinstance(payload, list):
-        if not any(isinstance(entry, dict) and "name" in entry for entry in payload):
-            return payload
+        if _is_field_list(payload):
+            return [
+                entry
+                for entry in payload
+                if isinstance(entry, dict) and needle in str(entry.get("name", "")).lower()
+            ]
         return [
-            entry
+            _filter_field_entries(entry, needle) if isinstance(entry, dict | list) else entry
             for entry in payload
-            if isinstance(entry, dict) and needle in str(entry.get("name", "")).lower()
         ]
     return payload
 
@@ -1166,9 +1181,12 @@ async def get_log_fields(
         dict: Log fields with keys:
             - status: "success" or "error"
             - fields: The appliance's field payload, filtered when
-              ``name_filter`` was given. A dict of one or more lists of
-              ``{"name": ..., "type": ...}`` entries -- typically a public
-              list plus a private-field list.
+              ``name_filter`` was given. On live 7.6.x the
+              ``{"name": ..., "type": ...}`` entries sit nested one level
+              down: ``fields["data"][0]["field"]`` (public) and
+              ``fields["data"][0]["private-field"]``. Some endpoints answer
+              flatter shapes; filtering and counts reach the lists wherever
+              they nest.
             - name_filter: The filter applied, or None
             - field_count: Field definitions returned after filtering
             - total_field_count: Field definitions before filtering
@@ -1185,7 +1203,7 @@ async def get_log_fields(
     Example:
         >>> result = await get_log_fields(logtype="traffic", name_filter="src")
         >>> print(f"{result['field_count']} of {result['total_field_count']}")
-        >>> for field in result["fields"]["data"]:
+        >>> for field in result["fields"]["data"][0]["field"]:
         ...     print(field["name"])
     """
     try:
@@ -1252,7 +1270,9 @@ async def search_traffic_logs(
             - count: Number of logs found
             - logs: List of traffic log entries
             - filter_applied: Filter string used
-            - tid: Task ID for pagination
+            - tid: Reusable pagination handle -- this tool wraps query_logs,
+              so the tid pages onward with fetch_more_logs like any
+              query_logs tid (it is NOT an appliance task id)
             - message: Error message if failed
 
     Example:
@@ -1360,7 +1380,9 @@ async def search_security_logs(
             - count: Number of security events found
             - logs: List of security log entries
             - filter_applied: Filter string used
-            - tid: Task ID for pagination
+            - tid: Reusable pagination handle -- this tool wraps query_logs,
+              so the tid pages onward with fetch_more_logs like any
+              query_logs tid (it is NOT an appliance task id)
             - message: Error message if failed
 
     Example:
@@ -1455,7 +1477,9 @@ async def search_event_logs(
             - count: Number of events found
             - logs: List of event log entries
             - filter_applied: Filter string used
-            - tid: Task ID for pagination
+            - tid: Reusable pagination handle -- this tool wraps query_logs,
+              so the tid pages onward with fetch_more_logs like any
+              query_logs tid (it is NOT an appliance task id)
             - message: Error message if failed
 
     Example:
