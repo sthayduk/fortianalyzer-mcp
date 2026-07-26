@@ -7,6 +7,8 @@ a valid-but-different address and returns real logs for the wrong host.
 
 from __future__ import annotations
 
+import pytest
+
 from fortianalyzer_mcp.masking.fpe_engine import FPEEngine
 from fortianalyzer_mcp.masking.unmask import ArgUnmasker
 from fortianalyzer_mcp.query.filters import FilterCondition
@@ -24,12 +26,12 @@ class TestFilterConditionDicts:
     def test_masked_ip_resolves_using_the_sibling_field(self) -> None:
         engine = _engine()
         unmasker = ArgUnmasker(engine)
-        token = engine.mask_ip("10.0.0.5")
-        assert token != "10.0.0.5", "precondition: the IP must actually be masked"
+        token = engine.mask_ip("192.0.2.5")
+        assert token != "192.0.2.5", "precondition: the IP must actually be masked"
 
         result = unmasker.unmask_args({"filters": [{"field": "srcip", "op": "eq", "value": token}]})
 
-        assert result["filters"][0]["value"] == "10.0.0.5"
+        assert result["filters"][0]["value"] == "192.0.2.5"
 
     def test_masked_username_resolves(self) -> None:
         engine = _engine()
@@ -54,18 +56,55 @@ class TestFilterConditionDicts:
     def test_list_values_resolve_elementwise(self) -> None:
         engine = _engine()
         unmasker = ArgUnmasker(engine)
-        tokens = [engine.mask_ip("10.0.0.5"), engine.mask_ip("10.0.0.6")]
+        tokens = [engine.mask_ip("192.0.2.5"), engine.mask_ip("192.0.2.6")]
 
         result = unmasker.unmask_args(
             {"filters": [{"field": "srcip", "op": "in", "value": tokens}]}
         )
 
-        assert result["filters"][0]["value"] == ["10.0.0.5", "10.0.0.6"]
+        assert result["filters"][0]["value"] == ["192.0.2.5", "192.0.2.6"]
 
     def test_unmasked_value_is_left_alone(self) -> None:
         unmasker = ArgUnmasker(_engine())
         result = unmasker.unmask_args({"filters": [{"field": "dstport", "op": "eq", "value": 443}]})
         assert result["filters"][0]["value"] == 443
+
+
+class TestAliasFieldNames:
+    """The advertised English aliases must type a value like their canonical target.
+
+    The compilers resolve ``source_ip`` to ``srcip``, and the server guide
+    advertises exactly that. A masked IP is unmarked, so if unmasking types the
+    value by the raw alias spelling instead of the canonical target, the token
+    rides through to the appliance as a valid-but-different address.
+    """
+
+    @pytest.mark.parametrize(
+        "alias", ["source_ip", "destination_ip", "dest_ip", "src_ip", "dst_ip"]
+    )
+    def test_masked_ip_resolves_under_an_ip_typed_alias(self, alias: str) -> None:
+        engine = _engine()
+        unmasker = ArgUnmasker(engine)
+        token = engine.mask_ip("192.0.2.5")
+        assert token != "192.0.2.5", "precondition: the IP must actually be masked"
+
+        result = unmasker.unmask_args({"filters": [{"field": alias, "op": "eq", "value": token}]})
+
+        assert result["filters"][0]["value"] == "192.0.2.5"
+
+    def test_model_form_resolves_under_an_alias(self) -> None:
+        engine = _engine()
+        unmasker = ArgUnmasker(engine)
+        token = engine.mask_ip("192.0.2.5")
+
+        result = unmasker.unmask_args(
+            {"filters": [FilterCondition(field="destination_ip", op="eq", value=token)]}
+        )
+
+        condition = result["filters"][0]
+        assert isinstance(condition, FilterCondition)
+        assert condition.value == "192.0.2.5"
+        assert condition.field == "destination_ip"
 
 
 class TestFilterConditionModels:
@@ -74,7 +113,7 @@ class TestFilterConditionModels:
     def test_model_instance_is_resolved_and_stays_a_model(self) -> None:
         engine = _engine()
         unmasker = ArgUnmasker(engine)
-        token = engine.mask_ip("10.0.0.5")
+        token = engine.mask_ip("192.0.2.5")
 
         result = unmasker.unmask_args(
             {"filters": [FilterCondition(field="srcip", op="eq", value=token)]}
@@ -82,7 +121,7 @@ class TestFilterConditionModels:
 
         condition = result["filters"][0]
         assert isinstance(condition, FilterCondition)
-        assert condition.value == "10.0.0.5"
+        assert condition.value == "192.0.2.5"
         assert condition.field == "srcip"
         assert condition.op == "eq"
 

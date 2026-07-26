@@ -62,6 +62,7 @@ from fortianalyzer_mcp.masking.fields import (
     SKIP_VALUES,
 )
 from fortianalyzer_mcp.masking.fpe_engine import FPEEngine, MaskingError
+from fortianalyzer_mcp.query.fields import canonical_log_field
 from fortianalyzer_mcp.utils.validation import sanitize_filter_value
 
 logger = logging.getLogger(__name__)
@@ -290,13 +291,20 @@ class ArgUnmasker:
 
         Models are returned as models (re-validated from the resolved dump) so
         the tool still receives the type its signature declares.
+
+        The sibling field is canonicalised through the query alias table first:
+        the compilers accept ``source_ip`` for ``srcip`` and the server guide
+        advertises that, but the masking allowlist is keyed on canonical names
+        only -- typed by the raw alias spelling, an unmarked IP token would slip
+        through untouched. Only the *type lookup* uses the canonical name; the
+        condition keeps the caller's spelling for the compiler to resolve.
         """
         is_model = isinstance(condition, BaseModel)
         data = dict(condition.model_dump()) if is_model else dict(condition)
 
         field = data.get("field")
         if isinstance(field, str):
-            data["value"] = self._unmask_entry(field, data.get("value"))
+            data["value"] = self._unmask_entry(canonical_log_field(field), data.get("value"))
 
         if is_model:
             return type(condition).model_validate(data)
