@@ -169,15 +169,24 @@ class TestArrayDialect:
         result, _ = compile_to_array([_c("name", "eq", "fgt-01")], "device")
         assert result == [["name", "==", "fgt-01"]]
 
-    def test_contains_uses_the_appliance_word_operator(self) -> None:
+    def test_contains_compiles_to_like_with_wildcards(self) -> None:
+        """``contain`` is accepted by live dvmdb and silently matches zero
+        rows; ``like`` with ``%`` wildcards is the spelling that works."""
         result, _ = compile_to_array([_c("name", "contains", "fgt")], "device")
-        assert result == [["name", "contain", "fgt"]]
+        assert result == [["name", "like", "%fgt%"]]
 
     def test_multiple_conditions_become_multiple_entries(self) -> None:
         result, _ = compile_to_array(
             [_c("name", "contains", "fgt"), _c("os_ver", "contains", "7.")], "device"
         )
-        assert result == [["name", "contain", "fgt"], ["os_ver", "contain", "7."]]
+        assert result == [["name", "like", "%fgt%"], ["os_ver", "like", "%7.%"]]
+
+    def test_not_contains_is_refused_rather_than_guessed(self) -> None:
+        """``!contain`` and ``not like`` both silently match zero rows live,
+        so there is no working spelling to emit."""
+        with pytest.raises(ValidationError) as exc:
+            compile_to_array([_c("name", "not_contains", "fgt")], "device")
+        assert "'ne'" in str(exc.value)
 
     def test_enum_name_is_coerced_to_its_code(self) -> None:
         result, _ = compile_to_array([_c("conn_status", "eq", "down")], "device")

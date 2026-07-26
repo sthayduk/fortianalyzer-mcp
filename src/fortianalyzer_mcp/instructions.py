@@ -80,11 +80,13 @@ and grouped with parentheses. FortiAnalyzer's own parser accepts more than
 that, but nothing beyond this set is verified against this API here, so treat
 anything else as an experiment you run through `filter`.
 
-search_devices and list_tasks take the same `filters` parameter, with one
-exception: `in` is rejected there -- their endpoints speak an array dialect
-with no verified OR form, so issue one call per value (`not_in` still works;
-it compiles to ANDed `!=`). Their field sets are small enough to enumerate, so
-an unknown field name there is a hard error listing the valid names; for
+search_devices and list_tasks take the same `filters` parameter, with two
+exceptions: `in` is rejected there (their array dialect has no verified OR
+form -- issue one call per value; `not_in` works, compiled to ANDed `!=`), and
+`not_contains` is rejected too, because every candidate spelling silently
+matches zero rows on the appliance -- use `ne` with exact values or exclude
+matches yourself. Their field sets are small enough to enumerate, so an
+unknown field name there is a hard error listing the valid names; for
 logtypes an unrecognised name is passed through with a warning instead, since
 the appliance's catalogue is larger than the server's list.
 
