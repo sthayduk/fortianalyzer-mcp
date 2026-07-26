@@ -493,19 +493,28 @@ async def search_devices(
         name_filter: Filter by device name (partial match)
         platform_filter: Filter by platform type
         os_version_filter: Filter by OS version
-        connection_status: Filter by connection status ("up", "down")
+        connection_status: Filter by connection status ("up", "down").
+            Caution: FortiAnalyzer commonly stores conn_status 0 ("unknown")
+            for log-only devices, so filtering "up"/"down" can match nothing
+            even when every device is healthy and logging. Check the raw
+            conn_status values in an unfiltered call before relying on this.
         filters: Structured conditions, each {field, op, value}, ANDed with the
             narrow parameters above. Fields: name, ip, sn, hostname, desc,
             os_ver, mr, patch, platform_str, conn_status, dev_status,
             mgmt_mode, adm_usr, vdom, hdisk_size, build.
-            Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, not_in.
+            Ops: eq, ne, gt, gte, lt, lte, contains, not_in. Not supported
+            here (hard error): "in" (issue one call per value) and
+            "not_contains" (no spelling works against this endpoint; use "ne"
+            with exact values or exclude matches yourself).
             Example: [{"field": "os_ver", "op": "contains", "value": "7.6"}]
 
     Returns:
         dict: Search results with keys:
             - status: "success" or "error"
             - count: Number of matching devices
-            - devices: List of matching device objects
+            - devices: List of matching device objects. The appliance always
+              includes ``oid`` in each object, even under a ``fields``
+              projection that does not request it.
             - message: Error message if failed
 
     Example:
@@ -519,14 +528,17 @@ async def search_devices(
         adom = validate_adom(adom or get_default_adom())
         client = _get_client()
 
-        # Build filter list
+        # Build filter list. Substring matching is ``like`` with % wildcards:
+        # the documented ``contain`` spelling is accepted by live dvmdb and
+        # silently matches zero rows, which made every one of these narrow
+        # parameters return an empty result against a populated fleet.
         entries: list[list[Any]] = []
         if name_filter:
-            entries.append(["name", "contain", name_filter])
+            entries.append(["name", "like", f"%{name_filter}%"])
         if platform_filter:
-            entries.append(["platform_str", "contain", platform_filter])
+            entries.append(["platform_str", "like", f"%{platform_filter}%"])
         if os_version_filter:
-            entries.append(["os_ver", "contain", os_version_filter])
+            entries.append(["os_ver", "like", f"%{os_version_filter}%"])
         if connection_status:
             # Coercion lives in the query vocabulary now, so "down" means 2
             # here and everywhere else that filters on conn_status. The

@@ -120,7 +120,7 @@ class TestSearchDevicesStructuredFilters:
             filters=[FilterCondition(field="os_version", op="contains", value="7.6")]
         )
 
-        assert fake.captured == [["os_ver", "contain", "7.6"]]
+        assert fake.captured == [["os_ver", "like", "%7.6%"]]
 
     async def test_enum_name_is_coerced(self, monkeypatch: pytest.MonkeyPatch) -> None:
         fake = self._install(monkeypatch)
@@ -142,8 +142,8 @@ class TestSearchDevicesStructuredFilters:
         )
 
         assert fake.captured is not None
-        assert ["name", "contain", "fgt"] in fake.captured
-        assert ["os_ver", "contain", "7.6"] in fake.captured
+        assert ["name", "like", "%fgt%"] in fake.captured
+        assert ["os_ver", "like", "%7.6%"] in fake.captured
 
     async def test_unknown_device_field_is_rejected_locally(
         self, monkeypatch: pytest.MonkeyPatch
