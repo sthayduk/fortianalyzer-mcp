@@ -1199,6 +1199,9 @@ async def get_log_fields(
         opaque: to learn a field's real shape, read the field in a sample row
         from ``query_logs`` rather than trying to decode the code. The value
         is passed through unchanged in case a future firmware documents it.
+        ``desc`` mirrors ``name`` on live 7.6.x -- the catalogue names fields
+        but does not describe them, so this tool answers "does this field
+        exist", not "what does it mean".
 
     Example:
         >>> result = await get_log_fields(logtype="traffic", name_filter="src")

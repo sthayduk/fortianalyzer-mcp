@@ -104,11 +104,16 @@ the appliance's catalogue is larger than the server's list.
 
 ## time_range vocabularies
 
-Two forms work everywhere: a preset token ("5-min", "1-hour", "6-hour",
-"12-hour", "24-hour", "7-day", "30-day") or a custom "start|end" pair
-("2026-01-01 00:00:00|2026-01-02 00:00:00"). The report tools additionally
-accept the appliance's own spelling ("last-7-days", "last-30-days",
-"last-4-weeks") and map the preset tokens onto it, so either works there.
+Two forms work everywhere: a preset token or a custom "start|end" pair
+("2026-01-01 00:00:00|2026-01-02 00:00:00"). The full preset vocabulary for
+the log, FortiView, event and incident families is "now" (a 5-min alias used
+by FortiView), "5-min", "15-min", "30-min", "1-hour", "2-hour", "6-hour",
+"12-hour", "24-hour", "1-day", "2-day", "7-day", "30-day", "90-day" -- tool
+docstrings quote the subset typical for that tool, but the whole vocabulary
+resolves in those families. The report tools are narrower: hour/day presets
+only ("1-hour", "6-hour", "12-hour", "24-hour", "1-day", "7-day", "30-day",
+"90-day"), plus the appliance's own "last-N-hours/-days/-weeks/-months"
+spelling and custom pairs; sub-hour presets are a hard error there.
 
 Relative windows are anchored on the appliance's newest ingested log, not on
 your clock, because FortiAnalyzer reads naive timestamps in its own timezone.
