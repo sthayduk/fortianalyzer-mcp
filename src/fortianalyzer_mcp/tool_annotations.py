@@ -11,7 +11,7 @@ Why this module sits at package top level and not under ``tools/``:
 ``register_dynamic_tools`` in ``server.py`` needs these constants, and
 importing anything under ``fortianalyzer_mcp.tools`` executes
 ``tools/__init__.py``, which imports all twelve tool modules and thereby
-registers all 83 raw tools. In dynamic mode that would silently replace
+registers all 85 raw tools. In dynamic mode that would silently replace
 the three-tool discovery surface with the full one. This module imports
 nothing from the package, so ``server.py``, ``tools/*`` and ``skills/*``
 can all reach it with no side effect and no cycle.

@@ -4,8 +4,8 @@
 
 ## Context
 
-Every tool was declared with a bare `@mcp.tool()`, so all 87 declaration sites — the 84 registered in
-full mode (83 raw tools plus the `faz_skill` dispatcher) and the 3 dynamic-mode discovery tools —
+Every tool was declared with a bare `@mcp.tool()`, so all 89 declaration sites — the 86 registered in
+full mode (85 raw tools plus the `faz_skill` dispatcher) and the 3 dynamic-mode discovery tools —
 shipped without `ToolAnnotations`. On the wire that is not neutral. The MCP spec's defaults are `readOnlyHint=false`,
 `destructiveHint=true`, `idempotentHint=false` — so an unannotated `get_system_status` advertises
 *"may modify its environment, possibly destructively, and is not safe to repeat"*. A client that gates
@@ -13,7 +13,7 @@ auto-approval on those hints has no way to distinguish a status read from `delet
 useful behaviour (approve readers freely, confirm writers) collapses into confirming everything or
 confirming nothing.
 
-The tools split unevenly: 72 are pure readers, 14 change FortiAnalyzer state, and one
+The tools split unevenly: 74 are pure readers, 14 change FortiAnalyzer state, and one
 (`execute_advanced_tool`) dispatches to any tool by name. Two classes sit on the boundary and decide
 what "read-only" means here:
 
@@ -34,7 +34,7 @@ narrow what a client believes.
 
 | Category | readOnly | destructive | idempotent | openWorld | Applies to |
 | --- | --- | --- | --- | --- | --- |
-| `READ_ONLY` | ✓ | ✗ | ✓ | ✓ | 70 — every reader, the TID queries, the file writers, `faz_skill` |
+| `READ_ONLY` | ✓ | ✗ | ✓ | ✓ | 72 — every reader, the TID queries, the file writers, `faz_skill` |
 | `READ_ONLY_LOCAL` | ✓ | ✗ | ✓ | ✗ | 2 — the dynamic-mode discovery tools |
 | `CREATES` | ✗ | ✗ | ✗ | ✓ | 6 — `add_device(s_bulk)`, `create_incident`, `add_alert_comment`, `run(_and_wait)_ioc_rescan` |
 | `UPDATES` | ✗ | ✗ | ✓ | ✓ | 3 — `(un)acknowledge_alerts`, `acknowledge_ioc_events` |
@@ -62,7 +62,7 @@ Three further calls worth recording, because each is the kind a reviewer re-open
 
 `tool_annotations.py` sits at package top level rather than under `tools/`. Importing anything under
 `fortianalyzer_mcp.tools` executes `tools/__init__.py`, which imports all twelve tool modules and
-registers all 83 raw tools — so had the constants lived there, `register_dynamic_tools` importing them
+registers all 85 raw tools — so had the constants lived there, `register_dynamic_tools` importing them
 would have silently replaced dynamic mode's three-tool surface with the full one. The module imports
 nothing from the package, so `server.py`, `tools/*` and `skills/*` all reach it with no cycle and no
 side effect.

@@ -75,7 +75,7 @@ def instructions() -> str:
 def test_server_declares_instructions(instructions: str) -> None:
     """The server ships a usage guide at all.
 
-    Without this, a client sees 84 tool docstrings and no arbitration
+    Without this, a client sees 86 tool docstrings and no arbitration
     between them.
     """
     assert instructions.strip(), "instructions= is present but empty"

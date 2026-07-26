@@ -185,7 +185,7 @@ async def get_endusers(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_endpoint_stats(
     adom: str | None = None,
     time_range: str = "7-day",
@@ -226,7 +226,7 @@ async def get_endpoint_stats(
         return {"status": "error", "message": redact(str(e))}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 async def get_enduser_stats(
     adom: str | None = None,
     time_range: str = "7-day",
