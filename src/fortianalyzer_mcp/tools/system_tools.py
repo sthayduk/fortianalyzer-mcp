@@ -319,17 +319,17 @@ async def list_tasks(
     log queries, device synchronization, and other long-running processes.
 
     Args:
-        filter_state: Filter by task state (optional):
-            - "pending": Not started
-            - "running": Currently executing
-            - "done": Completed
-            - "error": Failed
-            - "cancelling": Being cancelled
-            - "cancelled": Cancelled
+        filter_state: Filter by task state (optional). Valid names, mapped to
+            the numeric codes the appliance stores: pending, running,
+            cancelling, cancelled, done, error, aborting, aborted, warning,
+            to_continue, unknown.
         filters: Structured conditions, each {field, op, value}, ANDed with
             filter_state. Fields: id, title, src, user, adom, state, percent,
             num_done, num_err, num_lines, num_warn, start_tm, end_tm.
-            Ops: eq, ne, gt, gte, lt, lte, contains, not_contains, not_in.
+            Ops: eq, ne, gt, gte, lt, lte, contains, not_in. Not supported
+            here (hard error): "in" (issue one call per value) and
+            "not_contains" (no spelling works against this endpoint; use "ne"
+            with exact values or exclude matches yourself).
             Example: [{"field": "state", "op": "eq", "value": "running"}]
 
     Returns:
