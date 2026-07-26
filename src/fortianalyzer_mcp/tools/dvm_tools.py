@@ -13,7 +13,7 @@ from fortianalyzer_mcp.query.fields import coerce_value, get_vocabulary
 from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_array
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import CREATES, DESTRUCTIVE, READ_ONLY
-from fortianalyzer_mcp.utils.responses import redact
+from fortianalyzer_mcp.utils.responses import error_response, redact
 from fortianalyzer_mcp.utils.validation import (
     ValidationError,
     get_default_adom,
@@ -485,6 +485,7 @@ async def search_devices(
     os_version_filter: str | None = None,
     connection_status: str | None = None,
     filters: list[FilterCondition] | None = None,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
     """Search for devices with filters.
 
@@ -506,7 +507,16 @@ async def search_devices(
             here (hard error): "in" (issue one call per value) and
             "not_contains" (no spelling works against this endpoint; use "ne"
             with exact values or exclude matches yourself).
+            Aliases accepted for field names: device_name (name),
+            serial/serial_number (sn), os_version (os_ver),
+            platform (platform_str), connection_status (conn_status),
+            description (desc).
             Example: [{"field": "os_ver", "op": "contains", "value": "7.6"}]
+        fields: Specific fields to return per device, e.g.
+            ["name", "ip", "os_ver", "platform_str"]. Omitting this returns
+            every field the appliance defines -- roughly 60 per device, most
+            empty placeholders -- so pass a projection unless you genuinely
+            need the full object.
 
     Returns:
         dict: Search results with keys:
@@ -515,6 +525,8 @@ async def search_devices(
             - devices: List of matching device objects. The appliance always
               includes ``oid`` in each object, even under a ``fields``
               projection that does not request it.
+            - filter_applied: The compiled filter entries sent to the
+              appliance, or None when nothing narrowed the search
             - message: Error message if failed
 
     Example:
@@ -549,12 +561,14 @@ async def search_devices(
                 status_val = coerce_value("device", "conn_status", connection_status)
             except ValidationError:
                 valid = ", ".join(sorted(get_vocabulary("device").coercions["conn_status"]))
-                return {
-                    "status": "error",
-                    "message": (
+                return error_response(
+                    error="validation_error",
+                    message=(
                         f"Invalid connection_status '{connection_status}'. Must be one of: {valid}"
                     ),
-                }
+                    operation="search_devices",
+                    adom=adom,
+                )
             entries.append(["conn_status", "==", status_val])
         if filters:
             structured, _ = compile_to_array(filters, "device")
@@ -563,6 +577,7 @@ async def search_devices(
         devices = await client.list_devices(
             adom=adom,
             filter=entries if entries else None,
+            fields=fields,
         )
 
         return {
@@ -571,7 +586,16 @@ async def search_devices(
             # DVMDB device objects carry credential material (adm_pass, etc.);
             # mask it before returning over MCP.
             "devices": sanitize_for_logging(devices),
+            # Echo what was actually sent so a caller can verify the compiled
+            # filter instead of inferring it from which rows came back.
+            "filter_applied": entries if entries else None,
         }
+    except ValidationError as e:
+        return error_response(
+            error="validation_error", message=e, operation="search_devices", adom=adom
+        )
     except Exception as e:
         logger.error(f"Failed to search devices: {e}")
-        return {"status": "error", "message": redact(str(e))}
+        return error_response(
+            error="faz_operation_failed", message=e, operation="search_devices", adom=adom
+        )

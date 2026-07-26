@@ -97,15 +97,20 @@ class TestSearchDevicesStructuredFilters:
     """filters compiles to the array dialect and composes with the old params."""
 
     class FakeClient:
-        """Captures the filter search_devices hands to the client."""
+        """Captures the filter and projection search_devices hands to the client."""
 
         def __init__(self) -> None:
             self.captured: list[list[Any]] | None = None
+            self.captured_fields: list[str] | None = None
 
         async def list_devices(
-            self, adom: str, filter: list[list[Any]] | None = None
+            self,
+            adom: str,
+            filter: list[list[Any]] | None = None,
+            fields: list[str] | None = None,
         ) -> list[dict[str, Any]]:
             self.captured = filter
+            self.captured_fields = fields
             return []
 
     def _install(self, monkeypatch: pytest.MonkeyPatch) -> FakeClient:
@@ -144,6 +149,46 @@ class TestSearchDevicesStructuredFilters:
         assert fake.captured is not None
         assert ["name", "like", "%fgt%"] in fake.captured
         assert ["os_ver", "like", "%7.6%"] in fake.captured
+
+    async def test_response_echoes_the_compiled_filter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An LLM caller can verify what was sent without live-data inference."""
+        self._install(monkeypatch)
+
+        result = await dvm_tools.search_devices(name_filter="fgt")
+
+        assert result["filter_applied"] == [["name", "like", "%fgt%"]]
+
+    async def test_no_filters_echo_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._install(monkeypatch)
+
+        result = await dvm_tools.search_devices()
+
+        assert result["filter_applied"] is None
+
+    async def test_fields_projection_is_forwarded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """list_devices slims responses with fields=[...]; search_devices must too."""
+        fake = self._install(monkeypatch)
+
+        await dvm_tools.search_devices(fields=["name", "os_ver"])
+
+        assert fake.captured_fields == ["name", "os_ver"]
+
+    async def test_validation_error_returns_the_standard_envelope(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Error handlers normalised on the query_logs contract must not crash here."""
+        self._install(monkeypatch)
+
+        result = await dvm_tools.search_devices(
+            filters=[FilterCondition(field="bogus", op="eq", value="x")]
+        )
+
+        assert result["status"] == "error"
+        assert result["error"] == "validation_error"
+        assert result["operation"] == "search_devices"
+        assert result["retry_count"] == 0
 
     async def test_unknown_device_field_is_rejected_locally(
         self, monkeypatch: pytest.MonkeyPatch

@@ -11,8 +11,9 @@ from fortianalyzer_mcp.query.fields import TASK_STATE_CODES
 from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_array
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
-from fortianalyzer_mcp.utils.responses import redact
+from fortianalyzer_mcp.utils.responses import error_response, redact
 from fortianalyzer_mcp.utils.validation import (
+    ValidationError,
     get_default_adom,
     sanitize_for_logging,
     validate_adom,
@@ -149,7 +150,13 @@ async def list_adoms(
         dict: ADOM list with keys:
             - status: "success" or "error"
             - count: Number of ADOMs
-            - adoms: List of ADOM objects with name, desc, state, etc.
+            - adoms: List of ADOM objects with name, desc, state, etc. The
+              appliance always includes ``oid`` in each object, even under a
+              ``fields`` projection that does not request it. ``state`` is the
+              appliance's numeric enable flag -- live 7.6.x returns 1 for an
+              enabled ADOM; Fortinet publishes no legend for other values, so
+              treat anything else as not-enabled rather than guessing a
+              meaning.
             - message: Error message if failed
 
     Example:
@@ -337,6 +344,8 @@ async def list_tasks(
             - status: "success" or "error"
             - count: Number of tasks
             - tasks: List of task objects with id, state, progress, etc.
+            - filter_applied: The compiled filter entries sent to the
+              appliance, or None when nothing narrowed the listing
             - message: Error message if failed
 
     Example:
@@ -359,10 +368,11 @@ async def list_tasks(
             state_code = TASK_STATE_CODES.get(filter_state.strip().lower())
             if state_code is None:
                 valid = ", ".join(sorted(TASK_STATE_CODES))
-                return {
-                    "status": "error",
-                    "message": f"Invalid filter_state '{filter_state}'. Must be one of: {valid}",
-                }
+                return error_response(
+                    error="validation_error",
+                    message=f"Invalid filter_state '{filter_state}'. Must be one of: {valid}",
+                    operation="list_tasks",
+                )
             entries.append(["state", "==", state_code])
         if filters:
             structured, _ = compile_to_array(filters, "task")
@@ -374,10 +384,15 @@ async def list_tasks(
             "status": "success",
             "count": len(tasks),
             "tasks": tasks,
+            # Echo what was actually sent so a caller can verify the compiled
+            # filter instead of inferring it from which rows came back.
+            "filter_applied": filter_list,
         }
+    except ValidationError as e:
+        return error_response(error="validation_error", message=e, operation="list_tasks")
     except Exception as e:
         logger.error(f"Failed to list tasks: {e}")
-        return {"status": "error", "message": redact(str(e))}
+        return error_response(error="faz_operation_failed", message=e, operation="list_tasks")
 
 
 @mcp.tool(annotations=READ_ONLY)

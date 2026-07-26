@@ -123,3 +123,33 @@ class TestListTasksStructuredFilters:
         await system_tools.list_tasks(filter_state="done")
 
         assert fake.captured == [["state", "==", 4]]
+
+    async def test_response_echoes_the_compiled_filter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An LLM caller can verify what was sent without live-data inference."""
+        self._install(monkeypatch)
+
+        result = await system_tools.list_tasks(filter_state="running")
+
+        assert result["filter_applied"] == [["state", "==", 1]]
+
+    async def test_no_filter_echoes_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._install(monkeypatch)
+
+        result = await system_tools.list_tasks()
+
+        assert result["filter_applied"] is None
+
+    async def test_invalid_state_returns_the_standard_envelope(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Error handlers normalised on the query_logs contract must not crash here."""
+        self._install(monkeypatch)
+
+        result = await system_tools.list_tasks(filter_state="sideways")
+
+        assert result["status"] == "error"
+        assert result["error"] == "validation_error"
+        assert result["operation"] == "list_tasks"
+        assert result["retry_count"] == 0
