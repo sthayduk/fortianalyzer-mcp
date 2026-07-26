@@ -445,14 +445,11 @@ async def query_logs(
             - Device name: "myfw01" or "myfw01[root]" (with VDOM)
             - All devices: "All_FortiGate", "All_FortiMail", etc.
             - Default (None): Searches all FortiGate devices
-        time_range: Time range for logs. Options:
-            - "1-hour": Last 1 hour
-            - "6-hour": Last 6 hours
-            - "12-hour": Last 12 hours
-            - "24-hour": Last 24 hours
-            - "7-day": Last 7 days
-            - "30-day": Last 30 days
-            - Custom: "start_time|end_time" (e.g., "2024-01-01 00:00:00|2024-01-02 00:00:00")
+        time_range: Time range for logs. Presets: "5-min", "15-min",
+            "30-min", "1-hour", "2-hour", "6-hour", "12-hour", "24-hour",
+            "1-day", "2-day", "7-day", "30-day", "90-day" (plus "now", a
+            5-min alias). Custom: "start_time|end_time"
+            (e.g., "2024-01-01 00:00:00|2024-01-02 00:00:00")
         filter: Log filter expression (optional).
             Example: "srcip==10.0.0.1 and dstport==443"
             Operators: ==, !=, <, >, <=, >=, contain, !contain

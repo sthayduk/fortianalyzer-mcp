@@ -209,9 +209,12 @@ class TestArrayDialect:
         assert result == [["name", "!=", "a"], ["name", "!=", "b"]]
 
     def test_in_is_refused_rather_than_guessed(self) -> None:
+        """The refusal states its reason, like not_contains does -- a caller
+        who knows ``in`` works on query_logs deserves the why, not just a no."""
         with pytest.raises(ValidationError) as exc:
             compile_to_array([_c("name", "in", ["a", "b"])], "device")
         assert "one call per value" in str(exc.value)
+        assert "OR form" in str(exc.value)
 
     def test_no_conditions_compiles_to_an_empty_list(self) -> None:
         result, warnings = compile_to_array([], "device")

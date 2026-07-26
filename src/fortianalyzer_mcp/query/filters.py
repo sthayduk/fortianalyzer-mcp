@@ -257,8 +257,9 @@ def compile_to_array(
             )
 
         raise ValidationError(
-            f"Filter op '{op}' on '{field}' is not supported against this endpoint. "
-            "Issue one call per value instead."
+            f"Filter op '{op}' on '{field}' is not supported against this endpoint: "
+            "the array dialect has no verified OR form for it (query_logs accepts it "
+            "because the string dialect does). Issue one call per value instead."
         )
 
     return entries, warnings

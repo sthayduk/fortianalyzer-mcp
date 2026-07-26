@@ -127,7 +127,8 @@ order of magnitude. get_log_fields takes name_filter for the same reason.
 
 ## Error shapes are not yet uniform
 
-The log-search and traffic families return a machine-readable envelope:
+The log-search and traffic families, plus search_devices and list_tasks,
+return a machine-readable envelope:
 `{status, error, message, operation, retry_count}`, often with a
 `recommendation` naming the tool call that recovers. The remaining tool
 modules currently return only `{status: "error", message: <appliance text>}`,
