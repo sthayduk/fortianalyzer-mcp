@@ -12,7 +12,9 @@ endpoint speaks; it never hand-builds a filter.
 """
 
 from fortianalyzer_mcp.query.fields import (
+    TASK_STATE_CODES,
     Vocabulary,
+    canonical_log_field,
     coerce_value,
     get_vocabulary,
     resolve_field,
@@ -25,9 +27,11 @@ from fortianalyzer_mcp.query.filters import (
 )
 
 __all__ = [
+    "TASK_STATE_CODES",
     "FilterCondition",
     "FilterOp",
     "Vocabulary",
+    "canonical_log_field",
     "coerce_value",
     "compile_to_array",
     "compile_to_string",

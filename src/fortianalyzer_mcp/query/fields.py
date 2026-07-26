@@ -19,7 +19,10 @@ A "vocabulary" is one namespace of field names: a logtype (``traffic``,
   via ``/logview/logfields`` and this module does not reproduce that catalogue,
   so an unrecognised log field is passed through with a warning rather than
   rejected on authority this module does not have. The dvmdb-family sets are
-  small and stable, so an unknown name there is a genuine error.
+  small and stable, so an unknown name there is a genuine error. Pass-through
+  is gated on the name being *shaped* like a field name: the string dialect
+  interpolates the resolved name raw, so a "field" carrying whitespace, quotes
+  or operator characters is an injection attempt and is rejected outright.
 
 Once the per-logtype catalogues are generated from a live appliance (a spec
 verification item) the log vocabularies can flip to ``complete=True`` and
@@ -28,11 +31,19 @@ unknown-field rejection becomes uniform.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from fortianalyzer_mcp.utils.errors import ValidationError
+
+# What a FortiAnalyzer field name can look like. Everything observed in the
+# logview/dvmdb catalogues is lowercase alphanumerics with underscores; dot and
+# hyphen are tolerated for forward compatibility. Anything else cannot be a
+# field name, and since the string dialect interpolates the resolved name
+# unquoted, letting it through would hand the caller the filter string.
+_FIELD_NAME_RE = re.compile(r"^[a-z0-9_][a-z0-9_.-]*$")
 
 # Fields every FortiGate log record carries, regardless of logtype. Used as the
 # base of each log vocabulary and as the whole of the generic fallback.
@@ -199,9 +210,11 @@ _TASK_ALIASES: Mapping[str, str] = {
     "progress": "percent",
 }
 
-# Mirrors system_tools._TASK_STATE_NAMES, inverted. Kept in sync by
-# tests/test_query_fields.py::test_task_state_codes_match_system_tools.
-_TASK_STATE_CODES: Mapping[str, int] = {
+# The single source for FAZ task-state names -> wire codes (FNDN task schema).
+# system_tools derives its code->name display table from this mapping, so the
+# legacy filter_state parameter and the structured filters path translate
+# identically by construction.
+TASK_STATE_CODES: Mapping[str, int] = {
     "pending": 0,
     "running": 1,
     "cancelling": 2,
@@ -277,7 +290,7 @@ _VOCABULARIES: Mapping[str, Vocabulary] = {
         dialect="array",
         canonical=_TASK_FIELDS,
         aliases=_TASK_ALIASES,
-        coercions={"state": _TASK_STATE_CODES},
+        coercions={"state": TASK_STATE_CODES},
         complete=True,
     ),
 }
@@ -300,7 +313,11 @@ def resolve_field(vocabulary: str, name: str) -> tuple[str, str | None]:
 
     Raises:
         ValidationError: if the vocabulary enumerates its fields
-            (``complete=True``) and the name is neither canonical nor an alias.
+            (``complete=True``) and the name is neither canonical nor an alias,
+            or if the name is not shaped like a field name at all (whitespace,
+            quotes, operator characters) -- the string dialect interpolates the
+            resolved name unquoted, so a malformed name is an injection
+            attempt, not a spelling the appliance might know.
     """
     vocab = get_vocabulary(vocabulary)
     lowered = name.strip().lower()
@@ -314,11 +331,32 @@ def resolve_field(vocabulary: str, name: str) -> tuple[str, str | None]:
         valid = ", ".join(sorted(vocab.canonical))
         raise ValidationError(f"Unknown field '{name}' for {vocab.name}. Valid fields: {valid}")
 
+    if not _FIELD_NAME_RE.match(lowered):
+        raise ValidationError(
+            f"'{name}' cannot be a FortiAnalyzer field name. Field names are letters, "
+            "digits, underscores, dots or hyphens; operators and quoting belong in "
+            "'op' and 'value'."
+        )
+
     return lowered, (
         f"field '{name}' is not in the known {vocab.name} field set; passing it through "
         f"to FortiAnalyzer. Confirm the spelling with "
         f'get_log_fields(logtype="{vocab.name}", name_filter="...").'
     )
+
+
+def canonical_log_field(name: str) -> str:
+    """Best-effort canonical spelling of a log field name, without a vocabulary.
+
+    For callers that hold a field name but not the logtype it targets -- the
+    masking layer types a structured-filter value by its sibling ``field`` key
+    before any tool, and therefore any vocabulary, is known. The alias table is
+    shared by every log vocabulary precisely so a name cannot change meaning
+    between logtypes, which is what makes a vocabulary-less lookup safe. Names
+    that are neither aliases nor known fields come back lowercased, unchanged.
+    """
+    lowered = name.strip().lower()
+    return _LOG_ALIASES.get(lowered, lowered)
 
 
 def coerce_value(vocabulary: str, canonical_field: str, value: Any) -> Any:

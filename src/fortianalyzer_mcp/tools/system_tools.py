@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from fortianalyzer_mcp.api.client import FortiAnalyzerClient
+from fortianalyzer_mcp.query.fields import TASK_STATE_CODES
 from fortianalyzer_mcp.query.filters import FilterCondition, compile_to_array
 from fortianalyzer_mcp.server import get_faz_client, mcp
 from fortianalyzer_mcp.tool_annotations import DESTRUCTIVE, READ_ONLY
@@ -22,21 +23,10 @@ logger = logging.getLogger(__name__)
 
 # FAZ /task/task returns ``state`` as a numeric code on the wire (FNDN task
 # schema); some builds/endpoints use the string names instead. Keep both forms
-# working by normalizing to the lowercase name.
-_TASK_STATE_NAMES = {
-    0: "pending",
-    1: "running",
-    2: "cancelling",
-    3: "cancelled",
-    4: "done",
-    5: "error",
-    6: "aborting",
-    7: "aborted",
-    8: "warning",
-    9: "to_continue",
-    10: "unknown",
-}
-_TASK_STATE_CODES = {name: code for code, name in _TASK_STATE_NAMES.items()}
+# working by normalizing to the lowercase name. The name<->code table itself is
+# single-sourced from query.fields, so the legacy filter_state parameter and
+# the structured ``filters`` path translate identically by construction.
+_TASK_STATE_NAMES = {code: name for name, code in TASK_STATE_CODES.items()}
 _TASK_TERMINAL_STATES = {"done", "error", "cancelled", "aborted", "warning"}
 
 
@@ -366,9 +356,9 @@ async def list_tasks(
         # enum doesn't know is rejected instead of silently matching nothing.
         entries: list[list[Any]] = []
         if filter_state:
-            state_code = _TASK_STATE_CODES.get(filter_state.strip().lower())
+            state_code = TASK_STATE_CODES.get(filter_state.strip().lower())
             if state_code is None:
-                valid = ", ".join(sorted(_TASK_STATE_CODES))
+                valid = ", ".join(sorted(TASK_STATE_CODES))
                 return {
                     "status": "error",
                     "message": f"Invalid filter_state '{filter_state}'. Must be one of: {valid}",

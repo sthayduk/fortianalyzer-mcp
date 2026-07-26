@@ -41,6 +41,16 @@ class TestResolveField:
             resolve_field("device", "definitely_not_a_field")
         assert "conn_status" in str(exc.value)
 
+    def test_malformed_field_name_is_rejected_even_on_incomplete_vocabularies(self) -> None:
+        """Pass-through is for plausible field names, not for filter fragments.
+
+        The string dialect interpolates the resolved name raw, so anything
+        carrying whitespace, quotes or operator characters is an injection
+        attempt, not a spelling the appliance might know.
+        """
+        with pytest.raises(ValidationError):
+            resolve_field("traffic", 'srcip==1.1.1.1 or msg contain "')
+
     def test_unregistered_logtype_falls_back_to_the_generic_log_vocabulary(self) -> None:
         canonical, warning = resolve_field("voip", "srcip")
         assert canonical == "srcip"
@@ -73,13 +83,21 @@ class TestCoerceValue:
 
 
 class TestRegistryMatchesTheToolsItReplaces:
-    """The registry duplicates two enum maps; assert they cannot drift apart."""
+    """The registry is the single source for the enum maps the tools consume."""
 
-    def test_task_state_codes_match_system_tools(self) -> None:
-        from fortianalyzer_mcp.query.fields import _TASK_STATE_CODES
-        from fortianalyzer_mcp.tools.system_tools import _TASK_STATE_CODES as TOOL_CODES
+    def test_task_state_codes_are_single_sourced(self) -> None:
+        """system_tools must consume the registry's table, not carry a copy.
 
-        assert dict(_TASK_STATE_CODES) == dict(TOOL_CODES)
+        Two equal-but-separate tables let the legacy filter_state path and the
+        structured filters path drift apart inside the same function.
+        """
+        from fortianalyzer_mcp.query.fields import TASK_STATE_CODES
+        from fortianalyzer_mcp.tools import system_tools
+
+        assert system_tools.TASK_STATE_CODES is TASK_STATE_CODES
+        assert system_tools._TASK_STATE_NAMES == {
+            code: name for name, code in TASK_STATE_CODES.items()
+        }
 
     def test_conn_status_codes_cover_the_documented_names(self) -> None:
         from fortianalyzer_mcp.query.fields import _CONN_STATUS_CODES

@@ -144,6 +144,23 @@ class TestFieldResolution:
         assert len(warnings) == 1
         assert "get_log_fields" in warnings[0]
 
+    def test_malicious_field_name_is_rejected(self) -> None:
+        """The value slot is quoted; the field slot must be shape-gated.
+
+        Incomplete vocabularies pass unknown names through verbatim, and the
+        string dialect interpolates the field name raw -- without a shape gate
+        the field slot re-opens the injection class the value-side sanitiser
+        closed (issue #16), one slot to the left.
+        """
+        smuggled = 'srcip==1.1.1.1 or dstport!=0 or msg contain "'
+        with pytest.raises(ValidationError) as exc:
+            compile_to_string([_c(smuggled, "eq", "x")], "traffic")
+        assert "field name" in str(exc.value).lower()
+
+    def test_field_name_with_whitespace_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            compile_to_string([_c("srcip or 1", "eq", "x")], "traffic")
+
 
 class TestArrayDialect:
     """dvmdb/config/task take a list of [field, op, value] entries, ANDed."""
